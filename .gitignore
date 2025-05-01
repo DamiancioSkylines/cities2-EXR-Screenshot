@@ -304,10 +304,6 @@ node_modules/
 *.dsw
 *.dsp
 
-# Visual Studio 6 technical files
-*.ncb
-*.aps
-
 # Visual Studio LightSwitch build output
 **/*.HTMLClient/GeneratedArtifacts
 **/*.DesktopClient/GeneratedArtifacts
@@ -399,3 +395,6 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+/.idea/.idea.EXR Screenshot/.idea/dictionaries/project.xml
+/.idea/.idea.EXR Screenshot/.idea/indexLayout.xml
+/.idea/.idea.EXR Screenshot/.idea/.gitignore
