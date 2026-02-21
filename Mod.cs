@@ -4,18 +4,19 @@ using Game;
 using Game.Input;
 using Game.Modding;
 using Game.SceneFlow;
-using UnityEngine;
 using UnityEngine.InputSystem;
 using EXRScreenshot.Settings;
 using EXRScreenshot.Systems;
+using JetBrains.Annotations;
 
 namespace EXRScreenshot
 {
+    [UsedImplicitly]
     public class Mod : IMod
     {
         public static ILog LOG = LogManager.GetLogger("EXR Screenshot").SetShowsErrorsInUI(false);
         public static Setting MSetting { get; private set; }
-        public static ProxyAction MButtonAction;
+        private static ProxyAction MButtonAction;
 
         public const string KeyTakeScreenshotName = "MyButtonAction"; // Unique name for TakeScreenshot action
 
@@ -23,7 +24,7 @@ namespace EXRScreenshot
         {
             LOG.Info(nameof(OnLoad));
 
-            MSetting = new Setting(this); // Initialize the Setting
+            MSetting = new Setting(this); // Initialise the Setting
             MSetting.RegisterInOptionsUI();
             GameManager.instance.localizationManager.AddSource("en-US", new LocaleEn(MSetting));
 

@@ -68,7 +68,6 @@ namespace EXRScreenshot.Systems
             {
                 // Take a supersize screenshot that is *at least* 2160 pixels (4K).
                 // Height is better than width because of widescreen monitors.
-                // The server will decide the final resolution, i.e. rescale to 2160p if
                 // the resulting image is bigger. credit Toverux
                  scaleFactor = (int)Math.Ceiling(2160d / height);
                  //LOG.Info($"EXR Screenshot: Super Resolution enabled, scaleFactor = {scaleFactor}");
@@ -80,7 +79,17 @@ namespace EXRScreenshot.Systems
             width *= scaleFactor;
             height *= scaleFactor;
 
+            // Initialise the descriptor
             RenderTextureDescriptor descriptor = new RenderTextureDescriptor(width, height, RenderTextureFormat.ARGBFloat, 32);
+
+            // Force Linear
+            descriptor.sRGB = false; 
+
+            // Set remaining properties
+            descriptor.msaaSamples = 1;
+            descriptor.useMipMap = false;
+            
+            
             RenderTexture renderTexture = new RenderTexture(descriptor)
             {
                 antiAliasing = QualitySettings.antiAliasing,
@@ -111,6 +120,7 @@ namespace EXRScreenshot.Systems
             LOG.Info($"EXR Screenshot: Screenshot saved to: {exrPath}");
 
             /* Taking Debug PNG files will look very dark as trying to save Linear to RGB without gamma transform or something like that
+            // linear data is being forced into a gamma container
             byte[] pngBytes = texture.EncodeToPNG();
             string pngFilename = $"Screenshot_DEBUG_{DateTime.Now:yyyyMMdd_HHmmss}_{_screenshotCount}.png";
             string pngPath = Path.Combine(Application.persistentDataPath, "Screenshots", "EXR Debug", pngFilename);

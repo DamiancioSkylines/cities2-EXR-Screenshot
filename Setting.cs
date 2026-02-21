@@ -17,7 +17,7 @@ namespace EXRScreenshot
         public const string kKeybindingGroup = "MyKeybinding";
 
         public Setting(IMod mod) : base(mod) { }
-
+        
         [SettingsUIKeyboardBinding(BindingKeyboard.F1, Mod.KeyTakeScreenshotName, shift: true)]
         [SettingsUISection(kSection, kKeybindingGroup)]
         public ProxyBinding KeyTakeScreenshot { get; set; }
