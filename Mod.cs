@@ -8,6 +8,7 @@ using UnityEngine.InputSystem;
 using EXRScreenshot.Settings;
 using EXRScreenshot.Systems;
 using JetBrains.Annotations;
+using UnityEngine;
 
 namespace EXRScreenshot
 {
@@ -37,9 +38,17 @@ namespace EXRScreenshot
             {
                 if (phase == InputActionPhase.Canceled)
                 {
-                    LOG.Info("EXR Screenshot: Hotkey for TakeScreenshot activated");
-                    // Pass the setting to TakeScreenshot()
-                    MakingScreenshot.TakeScreenshot(MSetting.TakeSuperResolution);
+                    // 1. Create the recorder
+                    EXRRecorder recorder = new EXRRecorder();
+                    // 2. Generate a unique filename with timestamp
+                    string timestamp = System.DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+                    string fileName = $"Capture_{timestamp}.exr";
+                    string filePath = System.IO.Path.Combine(UnityEngine.Application.persistentDataPath, fileName);
+
+                    // 3. Fire the high-fidelity capture
+                    recorder.CaptureProEXR(filePath);
+                    
+                    LOG.Info($"EXR Capture Triggered: {fileName}");
                 }
             };
 
