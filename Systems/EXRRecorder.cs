@@ -8,18 +8,16 @@ namespace EXRScreenshot.Systems
 {
     public class EXRRecorder
     {
-        public void CaptureProEXR(string filePath)
+        public void CaptureProEXR(string filePath, float userScale)
         {
-            // 1. Find the Custom Pass Volume
             CustomPassVolume volume = GameObject.FindObjectOfType<CustomPassVolume>();
 
             if (volume == null)
             {
-                Mod.LOG.Error("EXR Mod: Could not find a CustomPassVolume.");
+                Mod.LOG.Error("EXR Screenshot:  Could not find a CustomPassVolume.");
                 return;
             }
 
-            // 2. Add our specialized Hijacker pass and cast it
             var capturePass = volume.AddPassOfType<EXRCapturePass>() as EXRCapturePass;
             if (capturePass == null) return;
 
@@ -27,49 +25,95 @@ namespace EXRScreenshot.Systems
             
             capturePass.OnBufferReady = (hdrBuffer) => 
             {
-                // 3. Request raw floating-point data directly from GPU
-                AsyncGPUReadback.Request(hdrBuffer, 0, (request) => 
+                Vector2 renderScale = hdrBuffer.rtHandleProperties.rtHandleScale;
+                
+                Camera mainCam = Camera.main;
+                int screenWidth = mainCam != null ? mainCam.pixelWidth : hdrBuffer.rt.width;
+                int screenHeight = mainCam != null ? mainCam.pixelHeight : hdrBuffer.rt.height;
+
+                int targetWidth = Mathf.RoundToInt(screenWidth * userScale);
+                int targetHeight = Mathf.RoundToInt(screenHeight * userScale);
+
+                // Use ARGBHalf (16-bit) to match the game's internal HDR precision
+                RenderTexture tempRGBA = RenderTexture.GetTemporary(
+                    targetWidth, 
+                    targetHeight, 
+                    0, 
+                    RenderTextureFormat.ARGBHalf, 
+                    RenderTextureReadWrite.Linear
+                );
+
+                hdrBuffer.rt.filterMode = FilterMode.Trilinear;
+                tempRGBA.filterMode = FilterMode.Trilinear;
+
+                RenderTexture previousActive = RenderTexture.active;
+                Graphics.SetRenderTarget(tempRGBA);
+                GL.Clear(true, true, Color.clear);
+                
+                Graphics.Blit(hdrBuffer, tempRGBA, new Vector2(renderScale.x, renderScale.y), Vector2.zero);
+                
+                RenderTexture.active = previousActive;
+
+                // Request data from GPU
+                AsyncGPUReadback.Request(tempRGBA, 0, (request) => 
                 {
-                    if (request.hasError) return;
+                    try
+                    {
+                        if (request.hasError)
+                        {
+                            Mod.LOG.Error("EXR Screenshot: GPU Readback error.");
+                            return;
+                        }
 
-                    // Get the bytes and the dimensions
-                    NativeArray<byte> rawData = request.GetData<byte>();
-                    int width = hdrBuffer.rt.width;
-                    int height = hdrBuffer.rt.height;
-                    
-                    SaveToDisk(rawData.ToArray(), width, height, filePath);
+                        // OPTIMIZATION: Use the NativeArray directly from the request
+                        // This avoids the 'LoadRawTextureData' and Texture2D creation overhead entirely.
+                        var rawData = request.GetData<byte>();
+                        
+                        // CompressZIP: Significantly reduces file size for high-res images
+                        Texture2D.EXRFlags flags = Texture2D.EXRFlags.CompressZIP;
+                        
+                        // I think due to final exr will be missing metadata it will report is 32 bit but everything should be intact so 16bit.
+                        NativeArray<byte> exrData = ImageConversion.EncodeNativeArrayToEXR(
+                            rawData, 
+                            tempRGBA.graphicsFormat, 
+                            (uint)targetWidth, 
+                            (uint)targetHeight, 
+                            0, 
+                            flags
+                        );
 
-                    // 4. Cleanup the pass immediately so we don't lag the game
-                    volume.customPasses.Remove(capturePass);
+                        SaveNativeArrayToDisk(exrData, filePath, targetWidth, targetHeight, renderScale, userScale);
+                        exrData.Dispose();
+                    }
+                    finally
+                    {
+                        RenderTexture.ReleaseTemporary(tempRGBA);
+                        if (volume != null && capturePass != null)
+                            volume.customPasses.Remove(capturePass);
+                    }
                 });
             };
 
-            // 5. Fire for the next frame
             capturePass.RequestFrame();
         }
 
-        private void SaveToDisk(byte[] data, int width, int height, string path)
+        private void SaveNativeArrayToDisk(NativeArray<byte> exrBytes, string path, int width, int height, Vector2 renderScale, float userScale)
         {
-            // CRITICAL: We use RGBAHalf (16-bit float) to match the HDRP buffer.
-            // This is what gives you 65,536 steps of color instead of 256.
-            Texture2D texture = new Texture2D(width, height, TextureFormat.RGBAHalf, false, true);
-
-            texture.LoadRawTextureData(data);
-            texture.Apply();
-
-            // Use the Unity native encoder (no flags needed for high bit depth)
-            byte[] exrBytes = texture.EncodeToEXR(Texture2D.EXRFlags.None);
-
-            // Ensure directory exists
-            string directory = Path.GetDirectoryName(path);
-            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory)) 
-                Directory.CreateDirectory(directory);
-            
-            File.WriteAllBytes(path, exrBytes);
-
-            // Cleanup memory
-            Object.Destroy(texture);
-            Mod.LOG.Info($"High-Fidelity EXR Saved to: {path}");
+            try 
+            {
+                string directory = Path.GetDirectoryName(path);
+                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory)) 
+                    Directory.CreateDirectory(directory);
+                
+                File.WriteAllBytes(path, exrBytes.ToArray());
+                
+               
+                Mod.LOG.Info($"EXR Screenshot: Saved {width}x{height} | 16-bit HDR | ZIP Compressed | SSAA: {userScale}x");
+            }
+            catch (System.Exception e)
+            {
+                Mod.LOG.Error($"EXR Screenshot: Save Error: {e.Message}");
+            }
         }
     }
 }

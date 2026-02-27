@@ -63,7 +63,7 @@ namespace EXRScreenshot.Systems
             int height = Screen.height;
             int scaleFactor = 1; // Default scale factor.
 
-            // Get the TakeSuperResolution setting.
+            // Get the m_TakeSuperResolution setting.
             if (mSettingTakeSuperResolution)
             {
                 // Take a supersize screenshot that is *at least* 2160 pixels (4K).
