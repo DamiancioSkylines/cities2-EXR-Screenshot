@@ -1,4 +1,5 @@
-﻿using Colossal.IO.AssetDatabase;
+﻿using System.IO;
+using Colossal.IO.AssetDatabase;
 using Colossal.Logging;
 using Game;
 using Game.Input;
@@ -19,36 +20,46 @@ namespace EXRScreenshot
         public static Setting MSetting { get; private set; }
         private static ProxyAction MButtonAction;
 
-        public const string KeyTakeScreenshotName = "MyButtonAction"; // Unique name for TakeScreenshot action
+        public const string TakeScreenshotActionName = "TakeScrenshot";
 
         public void OnLoad(UpdateSystem updateSystem)
         {
             LOG.Info(nameof(OnLoad));
 
-            MSetting = new Setting(this); // Initialise the Setting
+            MSetting = new Setting(this); // Initialize the Setting
             MSetting.RegisterInOptionsUI();
             GameManager.instance.localizationManager.AddSource("en-US", new LocaleEn(MSetting));
 
             MSetting.RegisterKeyBindings();
 
-            MButtonAction = MSetting.GetAction(KeyTakeScreenshotName);
+            MButtonAction = MSetting.GetAction(TakeScreenshotActionName);
             MButtonAction.shouldBeEnabled = true;
 
             MButtonAction.onInteraction += (_, phase) =>
             {
                 if (phase == InputActionPhase.Canceled)
                 {
-                    // 1. Create the recorder
-                    EXRRecorder recorder = new EXRRecorder();
-                    // 2. Generate a unique filename with timestamp
+                    // Generate a unique filename with timestamp
                     string timestamp = System.DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
-                    string fileName = $"Capture_{timestamp}.exr";
-                    string filePath = System.IO.Path.Combine(UnityEngine.Application.persistentDataPath, fileName);
+                    string folderPath = Path.Combine(Application.persistentDataPath, "Screenshots", "EXR");
+                    string filePath = Path.Combine(folderPath, $"Screenshot_{timestamp}.exr");
 
-                    // 3. Fire the high-fidelity capture
-                    recorder.CaptureProEXR(filePath);
+                    switch (MSetting.ModeDropdown)
+                    {
+                        case Setting.ScreenshotMethodEnum.NewMethod:
+                            EXRRecorder recorder = new EXRRecorder();
+                            // Get value from mod settings
+                            // float currentScale = MSetting.SupersampleScale; 
+                            // Do high-fidelity capture
+                            recorder.CaptureProEXR(filePath, MSetting.SupersampleScale);
+                            break;
+                        case Setting.ScreenshotMethodEnum.OldMethod:
+                            LOG.Info("EXR Screenshot: Hotkey for TakeScreenshot activated");
+                            // Do high-fidelity normal screenshot
+                            MakingScreenshot.TakeScreenshot(MSetting.TakeSuperResolution);
+                        break;
+                    }
                     
-                    LOG.Info($"EXR Capture Triggered: {fileName}");
                 }
             };
 
