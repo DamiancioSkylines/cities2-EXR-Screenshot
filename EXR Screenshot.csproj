@@ -17,16 +17,13 @@
 
     <ItemGroup>
         <Reference Include="Colossal.IO">
-          <HintPath>G:\SteamLibrary\steamapps\common\Cities Skylines II\Cities2_Data\Managed\Colossal.IO.dll</HintPath>
-          <Private>False</Private>
+            <Private>False</Private>
         </Reference>
         <Reference Include="Colossal.Mathematics">
-          <HintPath>G:\SteamLibrary\steamapps\common\Cities Skylines II\Cities2_Data\Managed\Colossal.Mathematics.dll</HintPath>
-          <Private>False</Private>
+            <Private>False</Private>
         </Reference>
         <Reference Include="Colossal.PSI.Common">
-          <HintPath>G:\SteamLibrary\steamapps\common\Cities Skylines II\Cities2_Data\Managed\Colossal.PSI.Common.dll</HintPath>
-          <Private>False</Private>
+            <Private>False</Private>
         </Reference>
         <Reference Include="Game">
             <Private>false</Private>
@@ -53,10 +50,10 @@
             <Private>false</Private>
         </Reference>
         <Reference Include="Unity.RenderPipelines.Core.Runtime">
-          <HintPath>G:\SteamLibrary\steamapps\common\Cities Skylines II\Cities2_Data\Managed\Unity.RenderPipelines.Core.Runtime.dll</HintPath>
+            <Private>False</Private>
         </Reference>
         <Reference Include="Unity.RenderPipelines.HighDefinition.Runtime">
-          <HintPath>G:\SteamLibrary\steamapps\common\Cities Skylines II\Cities2_Data\Managed\Unity.RenderPipelines.HighDefinition.Runtime.dll</HintPath>
+            <Private>False</Private>
         </Reference>
         <Reference Include="UnityEngine.CoreModule">
             <Private>false</Private>
@@ -74,8 +71,7 @@
             <Private>false</Private>
         </Reference>
         <Reference Include="UnityEngine.ImageConversionModule">
-          <HintPath>G:\SteamLibrary\steamapps\common\Cities Skylines II\Cities2_Data\Managed\UnityEngine.ImageConversionModule.dll</HintPath>
-          <Private>False</Private>
+            <Private>False</Private>
         </Reference>
     </ItemGroup>
 
@@ -95,30 +91,5 @@
         <None Include="$(ModPropsFile)" Link="Properties\Mod.props"/>
         <None Include="$(ModTargetsFile)" Link="Properties\Mod.targets"/>
     </ItemGroup>
-    
-    <Target Name="CopyUIAssets" AfterTargets="AfterBuild">
-        <ItemGroup>
-            <UIFiles Include="UI\dist\**\*.*" />
-        </ItemGroup>
-        <Message Text="Copying UI files from UI\dist to $(TargetDir)\UI" Importance="High" />
-        <Copy
-                SourceFiles="@(UIFiles)"
-                DestinationFolder="$(TargetDir)\UI"
-                ContinueOnError="false" />
-    </Target>
-
-    <Target Name="CleanUIAssets" BeforeTargets="BeforeClean">
-        <Message Text="Deleting UI files from $(TargetDir)\UI" Importance="High" />
-        <Delete
-                Files="$(TargetDir)\UI\**\*.*"
-                ContinueOnError="true" />
-        <RemoveDir
-                Directories="$(TargetDir)\UI"
-                ContinueOnError="true" />
-    </Target>
-
-    <Target Name="BuildUI" AfterTargets="AfterBuild">
-        <Exec Command="npm run build" WorkingDirectory="$(ProjectDir)/UI" />
-    </Target>
     
 </Project>
