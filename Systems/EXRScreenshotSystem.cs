@@ -10,7 +10,6 @@ namespace EXRScreenshot.Systems
 {
     public static class MakingScreenshot
     {
-        private static readonly ILog LOG = LogManager.GetLogger($"{nameof(EXRScreenshot)}");
         private static int _screenshotCount;
         private static bool _wasUIon;
 
@@ -21,41 +20,41 @@ namespace EXRScreenshot.Systems
 
             if (destination == null || camera == null)
             {
-                LOG.Error("EXR Screenshot: Camera or destination RenderTexture is null.");
+                Mod.LOG.Error("EXR Screenshot: Camera or destination RenderTexture is null.");
                 return;
             }
 
-            //LOG.Info("EXR Screenshot: Rendering camera to RenderTexture.");
+            //Mod.LOG.Info("EXR Screenshot: Rendering camera to RenderTexture.");
             RenderTexture previousRT = RenderTexture.active;
             RenderTexture.active = destination;
             camera.Render();
             RenderTexture.active = previousRT;
-            //LOG.Info("EXR Screenshot: Rendering complete.");
+            //Mod.LOG.Info("EXR Screenshot: Rendering complete.");
 
             Material material = new Material(Shader.Find("Hidden/ScreenCaptureCompose"));
             if (material == null)
             {
-                LOG.Error("EXR Screenshot: Failed to find shader 'Hidden/ScreenCaptureCompose'.");
+                Mod.LOG.Error("EXR Screenshot: Failed to find shader 'Hidden/ScreenCaptureCompose'.");
                 return;
             }
             
             // I don't remember what this was about, but it's breaking the mod.
-            //LOG.Info("EXR Screenshot: Blitting RenderTexture.");
+            //Mod.LOG.Info("EXR Screenshot: Blitting RenderTexture.");
             //Graphics.Blit(destination, destination, material, 0);
 
             Object.Destroy(material);
             destination.IncrementUpdateCount();
-            //LOG.Info("EXR Screenshot: Capture Screenshot Finished.");
+            //Mod.LOG.Info("EXR Screenshot: Capture Screenshot Finished.");
             GameManager.instance.userInterface.view.enabled = _wasUIon;
         }
 
         public static void TakeScreenshot(bool mSettingTakeSuperResolution)
         {
-            //LOG.Info("EXR Screenshot: Attempting to capture linear EXR screenshot using built-in method!");
+            //Mod.LOG.Info("EXR Screenshot: Attempting to capture linear EXR screenshot using built-in method!");
             Camera gameCamera = Camera.main;
             if (gameCamera == null)
             {
-                LOG.Error("EXR Screenshot: Failed to get game camera.");
+                Mod.LOG.Error("EXR Screenshot: Failed to get game camera.");
                 return;
             }
 
@@ -70,11 +69,11 @@ namespace EXRScreenshot.Systems
                 // Height is better than width because of widescreen monitors.
                 // the resulting image is bigger. credit Toverux
                  scaleFactor = (int)Math.Ceiling(2160d / height);
-                 //LOG.Info($"EXR Screenshot: Super Resolution enabled, scaleFactor = {scaleFactor}");
+                 //Mod.LOG.Info($"EXR Screenshot: Super Resolution enabled, scaleFactor = {scaleFactor}");
             }
 
 
-            //LOG.Info($"EXR Screenshot: Super Resolution disabled, scaleFactor = {scaleFactor}");
+            //Mod.LOG.Info($"EXR Screenshot: Super Resolution disabled, scaleFactor = {scaleFactor}");
             // Create a RenderTexture with the supersized resolution
             width *= scaleFactor;
             height *= scaleFactor;
@@ -98,11 +97,11 @@ namespace EXRScreenshot.Systems
             };
             if (renderTexture == null)
             {
-                LOG.Error("EXR Screenshot: Failed to create HDR RenderTexture.");
+                Mod.LOG.Error("EXR Screenshot: Failed to create HDR RenderTexture.");
                 return;
             }
             gameCamera.targetTexture = renderTexture;
-            LOG.Info($"EXR Screenshot: HDR RenderTexture created: {width}x{height} format={renderTexture.format} {descriptor.depthBufferBits} Bits");
+            Mod.LOG.Info($"EXR Screenshot: HDR RenderTexture created: {width}x{height} format={renderTexture.format} {descriptor.depthBufferBits} Bits");
 
             CaptureScreenshot(gameCamera, renderTexture);
 
@@ -110,14 +109,14 @@ namespace EXRScreenshot.Systems
             RenderTexture.active = renderTexture;
             texture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
             texture.Apply();
-            //LOG.Info("EXR Screenshot: Pixels read from HDR RenderTexture to HDR Texture2D.");
+            //Mod.LOG.Info("EXR Screenshot: Pixels read from HDR RenderTexture to HDR Texture2D.");
 
             byte[] exrBytes = texture.EncodeToEXR();
             string exrFilename = $"Screenshot_{DateTime.Now:yyyyMMdd_HHmmss}_{_screenshotCount}_{renderTexture.descriptor.colorFormat}_{renderTexture.descriptor.depthBufferBits}_Bits.exr";
             string exrPath = Path.Combine(Application.persistentDataPath, "Screenshots", "EXR", exrFilename);
             Directory.CreateDirectory(Path.GetDirectoryName(exrPath) ?? string.Empty);
             File.WriteAllBytes(exrPath, exrBytes);
-            LOG.Info($"EXR Screenshot: Screenshot saved to: {exrPath}");
+            Mod.LOG.Info($"EXR Screenshot: Screenshot saved to: {exrPath}");
 
             /* Taking Debug PNG files will look very dark as trying to save Linear to RGB without gamma transform or something like that
             // linear data is being forced into a gamma container
@@ -126,7 +125,7 @@ namespace EXRScreenshot.Systems
             string pngPath = Path.Combine(Application.persistentDataPath, "Screenshots", "EXR Debug", pngFilename);
             Directory.CreateDirectory(Path.GetDirectoryName(pngPath));
             File.WriteAllBytes(pngPath, pngBytes);
-            LOG.Info($"EXR Screenshot: Linear EXR screenshot (DEBUG PNG) saved to: {pngPath}");
+            Mod.LOG.Info($"EXR Screenshot: Linear EXR screenshot (DEBUG PNG) saved to: {pngPath}");
             */
             
             _screenshotCount++;
@@ -135,7 +134,7 @@ namespace EXRScreenshot.Systems
             RenderTexture.active = null;
             Object.Destroy(texture);
             Object.Destroy(renderTexture);
-            // LOG.Info("EXR Screenshot: Cleanup complete.");
+            // Mod.LOG.Info("EXR Screenshot: Cleanup complete.");
         }
     }
 }

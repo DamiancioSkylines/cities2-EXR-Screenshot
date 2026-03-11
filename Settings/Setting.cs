@@ -5,7 +5,7 @@ using Game.Modding;
 using Game.Settings;
 using Game.UI.Widgets;
 
-namespace EXRScreenshot
+namespace EXRScreenshot.Settings
 {
     /// <summary>
     /// Represents the mod's settings class, handling UI presentation, keybindings, and various mod-specific parameters.
@@ -63,6 +63,9 @@ namespace EXRScreenshot
         
         [SettingsUISection(MainTab, SettingsGroup)]
         public bool TakeSuperResolution { get; set; }
+        
+        [SettingsUISection(MainTab, SettingsGroup)]
+        public bool DebugLogging { get; set; } = false;
         
 
         [SettingsUIButton]

@@ -50,6 +50,10 @@ namespace EXRScreenshot.Settings
                 { setting.GetOptionDescLocaleID(nameof(Setting.TakeSuperResolution)), "Enable to take screenshots at minimum 4K resolution else doubles your resolution potentially making big files" },
                 { setting.GetOptionLabelLocaleID(nameof(Setting.SupersampleScale)), "Screenshots Scale" },
                 { setting.GetOptionDescLocaleID(nameof(Setting.SupersampleScale)), "Change final scale of the screenshot \n Currently not working correct keep it at 1" },
+                
+                // Debug Logging Toggle
+                { setting.GetOptionLabelLocaleID(nameof(Setting.DebugLogging)), "Debug Logging" },
+                { setting.GetOptionDescLocaleID(nameof(Setting.DebugLogging)), "Logs detailed HDRP Volume and Climate data when a screenshot is taken. It ignores the Lumina most likely because it snapshots state before post processing. Dont worry about it for now." }
             };
             
         }

@@ -7,14 +7,14 @@ namespace EXRScreenshot.Systems
     public class EXRCapturePass : CustomPass
     {
         public System.Action<RTHandle> OnBufferReady;
-        private bool m_RequestCapture = false;
+        private bool _requestCapture = false;
 
-        public void RequestFrame() => m_RequestCapture = true;
+        public void RequestFrame() => _requestCapture = true;
 
         protected override void Execute(CustomPassContext ctx)
         {
             // Capture the Game Camera, not the UI or Scene cameras
-            if (!m_RequestCapture || ctx.hdCamera.camera.cameraType != CameraType.Game)
+            if (!_requestCapture || ctx.hdCamera.camera.cameraType != CameraType.Game)
                 return;
 
             // This is the RAW HDR light data (Linear 16bit Float)
@@ -27,7 +27,7 @@ namespace EXRScreenshot.Systems
             if (rawBuffer != null)
             {
                 OnBufferReady?.Invoke(rawBuffer);
-                m_RequestCapture = false; // Reset after
+                _requestCapture = false; // Reset after
             }
         }
         // Clean-up to prevent memory leaks

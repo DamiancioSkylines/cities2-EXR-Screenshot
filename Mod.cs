@@ -16,63 +16,68 @@ namespace EXRScreenshot
     [UsedImplicitly]
     public class Mod : IMod
     {
-        public static ILog LOG = LogManager.GetLogger("EXR Screenshot").SetShowsErrorsInUI(false);
-        public static Setting MSetting { get; private set; }
-        private static ProxyAction MButtonAction;
+        public static readonly ILog LOG = LogManager.GetLogger(nameof(EXRScreenshot)).SetShowsErrorsInUI(false);
+        private static Setting Setting { get; set; }
+        private static ProxyAction _takeScreenshotAction;
 
         public const string TakeScreenshotActionName = "TakeScrenshot";
 
         public void OnLoad(UpdateSystem updateSystem)
         {
-            LOG.Info(nameof(OnLoad));
+            // LOG.Info(nameof(OnLoad));
 
-            MSetting = new Setting(this); // Initialize the Setting
-            MSetting.RegisterInOptionsUI();
-            GameManager.instance.localizationManager.AddSource("en-US", new LocaleEn(MSetting));
+            Setting = new Setting(this);
+            Setting.RegisterInOptionsUI();
+            GameManager.instance.localizationManager.AddSource("en-US", new LocaleEn(Setting));
 
-            MSetting.RegisterKeyBindings();
+            Setting.RegisterKeyBindings();
 
-            MButtonAction = MSetting.GetAction(TakeScreenshotActionName);
-            MButtonAction.shouldBeEnabled = true;
+            _takeScreenshotAction = Setting.GetAction(TakeScreenshotActionName);
+            _takeScreenshotAction.shouldBeEnabled = true;
 
-            MButtonAction.onInteraction += (_, phase) =>
+            _takeScreenshotAction.onInteraction += (_, phase) =>
             {
                 if (phase == InputActionPhase.Canceled)
                 {
-                    // Generate a unique filename with timestamp
-                    string timestamp = System.DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
-                    string folderPath = Path.Combine(Application.persistentDataPath, "Screenshots", "EXR");
-                    string filePath = Path.Combine(folderPath, $"Screenshot_{timestamp}.exr");
+                    if (Setting.DebugLogging)
+                    {
+                        VolumeInspection.LogGlobalStack();
+                    }
 
-                    switch (MSetting.ModeDropdown)
+                    // Generate a unique filename with timestamp
+                    var timestamp = System.DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+                    var folderPath = Path.Combine(Application.persistentDataPath, "Screenshots", "EXR");
+                    var filePath = Path.Combine(folderPath, $"Screenshot_{timestamp}.exr");
+
+                    switch (Setting.ModeDropdown)
                     {
                         case Setting.ScreenshotMethodEnum.NewMethod:
                             EXRRecorder recorder = new EXRRecorder();
                             // Get value from mod settings
-                            // float currentScale = MSetting.SupersampleScale; 
+                            // float currentScale = Setting.SupersampleScale; 
                             // Do high-fidelity capture
-                            recorder.CaptureProEXR(filePath, MSetting.SupersampleScale);
+                            recorder.CaptureProEXR(filePath, Setting.SupersampleScale);
                             break;
                         case Setting.ScreenshotMethodEnum.OldMethod:
                             LOG.Info("EXR Screenshot: Hotkey for TakeScreenshot activated");
                             // Do high-fidelity normal screenshot
-                            MakingScreenshot.TakeScreenshot(MSetting.TakeSuperResolution);
+                            MakingScreenshot.TakeScreenshot(Setting.TakeSuperResolution);
                         break;
                     }
                     
                 }
             };
 
-            AssetDatabase.global.LoadSettings(nameof(EXRScreenshot), MSetting, new Setting(this));
+            AssetDatabase.global.LoadSettings(nameof(EXRScreenshot), Setting, new Setting(this));
         }
         
         public void OnDispose()
         {
             LOG.Info(nameof(OnDispose));
-            if (MSetting != null)
+            if (Setting != null)
             {
-                MSetting.UnregisterInOptionsUI();
-                MSetting = null;
+                Setting.UnregisterInOptionsUI();
+                Setting = null;
             }
         }
     }
