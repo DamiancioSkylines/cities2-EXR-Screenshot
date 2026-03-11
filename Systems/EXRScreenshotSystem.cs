@@ -12,11 +12,15 @@ namespace EXRScreenshot.Systems
         /// <summary>
         /// Captures HDR data and logs a complete map of the HDRP Custom Pass stack.
         /// </summary>
-        public void CaptureProEXR(string filePath, float userScale)
+        public void CaptureEXR()
         {
-            // 1. LIST EVERYTHING
-            // We find every single volume to see the full "rendering schedule"
-            CustomPassVolume[] volumes = Object.FindObjectsOfType<CustomPassVolume>()
+            var timestamp = System.DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+            var folderPath = Path.GetFullPath(Path.Combine(Application.persistentDataPath, "Screenshots", "EXR"));
+            var filePath = Path.Combine(folderPath, $"Screenshot_{timestamp}.exr");
+            var fileName = $"Screenshot_{timestamp}.exr";
+            
+            // Find every single volume to see the full "rendering schedule"
+            var volumes = Object.FindObjectsOfType<CustomPassVolume>()
                                             .OrderByDescending(v => v.priority).ToArray();
             
             //Mod.LOG.Info($"--- HDRP CUSTOM PASS MAP (Total Volumes: {volumes.Length}) ---");
@@ -35,17 +39,16 @@ namespace EXRScreenshot.Systems
                 }
 
                 /*
-                for (int i = 0; i < v.customPasses.Count; i++)
+                for (var i = 0; i < v.customPasses.Count; i++)
                 {
                     var p = v.customPasses[i];
-                    string pStatus = p.enabled ? "ON" : "OFF";
+                    var pStatus = p.enabled ? "ON" : "OFF";
                     Mod.LOG.Info($"  --> [{i}] {p.name} (Class: {p.GetType().Name}) [{pStatus}]");
                 }
                 */
             }
             //Mod.LOG.Info("---------------------------------------------------------");
-
-            // 2. EXECUTE CAPTURE
+            
             if (targetVolume == null)
             {
                 Mod.LOG.Error("No suitable 'BeforePostProcess' volume found to inject capture pass.");
@@ -67,38 +70,38 @@ namespace EXRScreenshot.Systems
             
             capturePass.OnBufferReady = (hdrBuffer) => 
             {
+                // 1. Get the internal scale and viewport size from the buffer itself
                 Vector2 renderScale = hdrBuffer.rtHandleProperties.rtHandleScale;
-                Camera mainCam = Camera.main;
-                int screenWidth = mainCam != null ? mainCam.pixelWidth : hdrBuffer.rt.width;
-                int screenHeight = mainCam != null ? mainCam.pixelHeight : hdrBuffer.rt.height;
+                var internalRes = hdrBuffer.rtHandleProperties.currentViewportSize;
+                
+                var bufferWidth = internalRes.x;
+                var bufferHeight = internalRes.y;
 
-                int targetWidth = Mathf.RoundToInt(screenWidth * userScale);
-                int targetHeight = Mathf.RoundToInt(screenHeight * userScale);
+                // Mod.LOG.Info($"Capturing internal buffer size: {bufferWidth}x{bufferHeight}");
+                var tempTexture = RenderTexture.GetTemporary(bufferWidth, bufferHeight, 0, RenderTextureFormat.ARGBHalf, RenderTextureReadWrite.Linear);
 
-                RenderTexture tempRGBA = RenderTexture.GetTemporary(targetWidth, targetHeight, 0, RenderTextureFormat.ARGBHalf, RenderTextureReadWrite.Linear);
-
-                RenderTexture previousActive = RenderTexture.active;
-                Graphics.SetRenderTarget(tempRGBA);
+                var previousActive = RenderTexture.active;
+                Graphics.SetRenderTarget(tempTexture);
                 GL.Clear(true, true, Color.clear);
                 
-                Graphics.Blit(hdrBuffer, tempRGBA, new Vector2(renderScale.x, renderScale.y), Vector2.zero);
+                Graphics.Blit(hdrBuffer, tempTexture, new Vector2(renderScale.x, renderScale.y), Vector2.zero);
                 RenderTexture.active = previousActive;
 
-                AsyncGPUReadback.Request(tempRGBA, 0, (request) => 
+                AsyncGPUReadback.Request(tempTexture, 0, (request) => 
                 {
                     try
                     {
                         if (request.hasError) return;
                         var rawData = request.GetData<byte>();
-                        NativeArray<byte> exrData = ImageConversion.EncodeNativeArrayToEXR(
-                            rawData, tempRGBA.graphicsFormat, (uint)targetWidth, (uint)targetHeight, 0, Texture2D.EXRFlags.CompressZIP
+                        var exrData = ImageConversion.EncodeNativeArrayToEXR(
+                            rawData, tempTexture.graphicsFormat, (uint)bufferWidth, (uint)bufferHeight, 0, Texture2D.EXRFlags.CompressZIP
                         );
-                        SaveNativeArrayToDisk(exrData, filePath, targetWidth, targetHeight);
+                        SaveNativeArrayToDisk(exrData, filePath, fileName, bufferWidth, bufferHeight);
                         exrData.Dispose();
                     }
                     finally
                     {
-                        RenderTexture.ReleaseTemporary(tempRGBA);
+                        RenderTexture.ReleaseTemporary(tempTexture);
                         if (targetVolume != null && capturePass != null)
                             targetVolume.customPasses.Remove(capturePass);
                     }
@@ -108,16 +111,16 @@ namespace EXRScreenshot.Systems
             capturePass.RequestFrame();
         }
 
-        private void SaveNativeArrayToDisk(NativeArray<byte> exrBytes, string path, int width, int height)
+        private void SaveNativeArrayToDisk(NativeArray<byte> exrBytes, string path, string fileName, int width, int height)
         {
             try 
             {
-                string directory = Path.GetDirectoryName(path);
+                var directory = Path.GetDirectoryName(path);
                 if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory)) 
                     Directory.CreateDirectory(directory);
                 
                 File.WriteAllBytes(path, exrBytes.ToArray());
-                Mod.LOG.Info($"EXR Screenshot Success: {width}x{height} saved to {path}");
+                Mod.LOG.Info($"EXR Screenshot Success: {width} x {height} | File: {fileName} | Folder: {directory}");
             }
             catch (System.Exception e) 
             { 

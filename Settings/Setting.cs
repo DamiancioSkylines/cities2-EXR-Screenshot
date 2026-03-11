@@ -50,19 +50,21 @@ namespace EXRScreenshot.Settings
         [SettingsUISection(MainTab, SettingsGroup)]
         public ProxyBinding KeyTakeScreenshot { get; set; }
         
-        /*
+        
         /// <summary>
         /// Gets or sets the currently selected screenshot taking method.
         /// </summary>
+        [SettingsUIHidden]
         [SettingsUISection(MainTab, SettingsGroup)]
         public ScreenshotMethodEnum ModeDropdown { get; set; } = ScreenshotMethodEnum.NewMethod;
-        */
+        
         
         [SettingsUIHidden]
         [SettingsUISection(MainTab, SettingsGroup)]
         [SettingsUISlider(min = 1.0f, max = 4.0f, step = 0.5f, unit = "Scale")]
         public float SupersampleScale { get; set; } = 1.0f;
         
+        [SettingsUIHidden]
         [SettingsUISection(MainTab, SettingsGroup)]
         public bool TakeSuperResolution { get; set; }
         
@@ -118,7 +120,7 @@ namespace EXRScreenshot.Settings
         {
             TakeSuperResolution = false;
             SupersampleScale = 1.0f;
-            // ModeDropdown = ScreenshotMethodEnum.NewMethod;
+            ModeDropdown = ScreenshotMethodEnum.NewMethod;
         }
     }
 }
