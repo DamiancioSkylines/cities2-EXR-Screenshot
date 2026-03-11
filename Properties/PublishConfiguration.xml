@@ -4,16 +4,24 @@
 	<!--Name of the mod to display to players-->
 	<DisplayName Value="EXR Screenshot" />
 	<!--Short description of the mod-->
-	<ShortDescription Value="Take EXR screenshots" />
+	<ShortDescription Value="Capture high-dynamic-range linear EXR screenshots for LUT authoring." />
 	<!--Long description of the mod. Single line or multi line. Supports minimal markdown subset-->
-	<!--LongDescription Value="This mod lets you take EXR in linear color space screenshots" /-->
+	<!--LongDescription Value="This mod lets you take EXR in linear colour space screenshots" /-->
 	<LongDescription>
-This mod captures native game EXR screenshots in LogC color space to your EXR folder (located within your Cities Skylines II data directory Screenshots).
-The UI is automatically hidden and restored after capture. C:\Users\username\AppData\LocalLow\Colossal Order\Cities Skylines II\Screenshots\EXR
-For LUT development, it's recommended to set tonemapping to "none" in the Lamina mod, as this mod does not manage tonemapping.
-Captured screenshots are currently affected by the game's EyeAdaptation auto-exposure (I will try to fix this).
-You can also toggle super-resolution capture in the Mod Options. 
-SHIFT + F1 - to take EXR screenshot
+A specialized tool for creators to capture **16-bit Floating Point EXR** screenshots in **Linear Colour Space**. Perfect for creating custom LUTs.
+
+### Key Features:
+* **Raw GPU Capture:** Images are captured directly from the GPU render buffer before post-processing (No Bloom, LUTs, Tonemapping, Colour Adjustments and stuff like that).
+* **Accurate Resolution:** Capture resolution is determined by the internal render buffer size, providing the purest data possible before upscaling.
+* **Deep Rendering Inspection:** Includes an optional debug toggle to log active HDRP Volume data, Climate overrides, and Exposure settings directly to the game, beta feature.
+* **Linear Workflow:** Exports in a format that preserves the full dynamic range of the scene.
+
+### Usage:
+* **SHIFT + F1**: Capture an EXR screenshot.
+* Files are saved to: `%AppData%\LocalLow\Colossal Order\Cities Skylines II\Screenshots\EXR\`
+* To increase the resolution of screenshot you need to increase native resolution fe. turn off DLSS or any upscaling.
+
+*Note: Captured images currently include the game's Eye Adaptation (Auto-Exposure).*
 	</LongDescription>
 	<!--Thumbnail-->
 	<Thumbnail Value="Properties/Thumbnail.png" />
@@ -24,9 +32,9 @@ SHIFT + F1 - to take EXR screenshot
 	<!--Link to the forum post where the mod can be discussed-->
 	<ForumLink Value="" />
 	<!--Version of the mod-->
-	<ModVersion Value="0.1" />
+	<ModVersion Value="1.0.0" />
 	<!--Recommended version of the base game to use the mod-->
-	<GameVersion Value="1.1.*" />
+	<GameVersion Value="1.5.*" />
 	<!--Dependency for the mod, can be set multiple times-->
 	<Dependency Id="" />
 	<!--Required DLC, can be set multiple times. Supported values are "Landmark Buildings", "San Fransisco Set", "Beach Properties", "Urban Promenades", "Modern Architecture"-->
