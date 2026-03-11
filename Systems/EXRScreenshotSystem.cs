@@ -1,140 +1,128 @@
-using System;
-using Colossal.Logging;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.HighDefinition;
+using Unity.Collections;
 using System.IO;
-using Object = UnityEngine.Object;
-using Game.SceneFlow;
+using System.Linq;
 
 namespace EXRScreenshot.Systems
-
 {
-    public static class MakingScreenshot
+    public class EXRScreenshotSystem
     {
-        private static int _screenshotCount;
-        private static bool _wasUIon;
-
-        private static void CaptureScreenshot(Camera camera, RenderTexture destination)
+        /// <summary>
+        /// Captures HDR data and logs a complete map of the HDRP Custom Pass stack.
+        /// </summary>
+        public void CaptureProEXR(string filePath, float userScale)
         {
-            _wasUIon = GameManager.instance.userInterface.view.enabled;
-            GameManager.instance.userInterface.view.enabled = false;
+            // 1. LIST EVERYTHING
+            // We find every single volume to see the full "rendering schedule"
+            CustomPassVolume[] volumes = Object.FindObjectsOfType<CustomPassVolume>()
+                                            .OrderByDescending(v => v.priority).ToArray();
+            
+            //Mod.LOG.Info($"--- HDRP CUSTOM PASS MAP (Total Volumes: {volumes.Length}) ---");
 
-            if (destination == null || camera == null)
+            CustomPassVolume targetVolume = null;
+
+            foreach (var v in volumes)
             {
-                Mod.LOG.Error("EXR Screenshot: Camera or destination RenderTexture is null.");
+                //string status = v.enabled ? "ACTIVE" : "DISABLED";
+                //Mod.LOG.Info($"Volume: [{v.name}] | Injection: {v.injectionPoint} | Priority: {v.priority} | Status: {status}");
+                
+                // Identify the best volume for our RAW capture
+                if (v.enabled && v.injectionPoint == CustomPassInjectionPoint.BeforePostProcess && targetVolume == null)
+                {
+                    targetVolume = v;
+                }
+
+                /*
+                for (int i = 0; i < v.customPasses.Count; i++)
+                {
+                    var p = v.customPasses[i];
+                    string pStatus = p.enabled ? "ON" : "OFF";
+                    Mod.LOG.Info($"  --> [{i}] {p.name} (Class: {p.GetType().Name}) [{pStatus}]");
+                }
+                */
+            }
+            //Mod.LOG.Info("---------------------------------------------------------");
+
+            // 2. EXECUTE CAPTURE
+            if (targetVolume == null)
+            {
+                Mod.LOG.Error("No suitable 'BeforePostProcess' volume found to inject capture pass.");
                 return;
             }
 
-            //Mod.LOG.Info("EXR Screenshot: Rendering camera to RenderTexture.");
-            RenderTexture previousRT = RenderTexture.active;
-            RenderTexture.active = destination;
-            camera.Render();
-            RenderTexture.active = previousRT;
-            //Mod.LOG.Info("EXR Screenshot: Rendering complete.");
+            var capturePass = targetVolume.AddPassOfType<EXRCapturePass>() as EXRCapturePass;
+            if (capturePass == null) return;
 
-            Material material = new Material(Shader.Find("Hidden/ScreenCaptureCompose"));
-            if (material == null)
+            capturePass.name = "EXR_Raw_Capture_Pass";
+
+            // Move to Index 0 so we are the VERY FIRST thing this volume does
+            if (targetVolume.customPasses.Count > 1)
             {
-                Mod.LOG.Error("EXR Screenshot: Failed to find shader 'Hidden/ScreenCaptureCompose'.");
-                return;
+                targetVolume.customPasses.RemoveAt(targetVolume.customPasses.Count - 1);
+                targetVolume.customPasses.Insert(0, capturePass);
+                //Mod.LOG.Info($"EXR: Injected capture into [{targetVolume.name}] at index 0.");
             }
             
-            // I don't remember what this was about, but it's breaking the mod.
-            //Mod.LOG.Info("EXR Screenshot: Blitting RenderTexture.");
-            //Graphics.Blit(destination, destination, material, 0);
+            capturePass.OnBufferReady = (hdrBuffer) => 
+            {
+                Vector2 renderScale = hdrBuffer.rtHandleProperties.rtHandleScale;
+                Camera mainCam = Camera.main;
+                int screenWidth = mainCam != null ? mainCam.pixelWidth : hdrBuffer.rt.width;
+                int screenHeight = mainCam != null ? mainCam.pixelHeight : hdrBuffer.rt.height;
 
-            Object.Destroy(material);
-            destination.IncrementUpdateCount();
-            //Mod.LOG.Info("EXR Screenshot: Capture Screenshot Finished.");
-            GameManager.instance.userInterface.view.enabled = _wasUIon;
+                int targetWidth = Mathf.RoundToInt(screenWidth * userScale);
+                int targetHeight = Mathf.RoundToInt(screenHeight * userScale);
+
+                RenderTexture tempRGBA = RenderTexture.GetTemporary(targetWidth, targetHeight, 0, RenderTextureFormat.ARGBHalf, RenderTextureReadWrite.Linear);
+
+                RenderTexture previousActive = RenderTexture.active;
+                Graphics.SetRenderTarget(tempRGBA);
+                GL.Clear(true, true, Color.clear);
+                
+                Graphics.Blit(hdrBuffer, tempRGBA, new Vector2(renderScale.x, renderScale.y), Vector2.zero);
+                RenderTexture.active = previousActive;
+
+                AsyncGPUReadback.Request(tempRGBA, 0, (request) => 
+                {
+                    try
+                    {
+                        if (request.hasError) return;
+                        var rawData = request.GetData<byte>();
+                        NativeArray<byte> exrData = ImageConversion.EncodeNativeArrayToEXR(
+                            rawData, tempRGBA.graphicsFormat, (uint)targetWidth, (uint)targetHeight, 0, Texture2D.EXRFlags.CompressZIP
+                        );
+                        SaveNativeArrayToDisk(exrData, filePath, targetWidth, targetHeight);
+                        exrData.Dispose();
+                    }
+                    finally
+                    {
+                        RenderTexture.ReleaseTemporary(tempRGBA);
+                        if (targetVolume != null && capturePass != null)
+                            targetVolume.customPasses.Remove(capturePass);
+                    }
+                });
+            };
+
+            capturePass.RequestFrame();
         }
 
-        public static void TakeScreenshot(bool mSettingTakeSuperResolution)
+        private void SaveNativeArrayToDisk(NativeArray<byte> exrBytes, string path, int width, int height)
         {
-            //Mod.LOG.Info("EXR Screenshot: Attempting to capture linear EXR screenshot using built-in method!");
-            Camera gameCamera = Camera.main;
-            if (gameCamera == null)
+            try 
             {
-                Mod.LOG.Error("EXR Screenshot: Failed to get game camera.");
-                return;
+                string directory = Path.GetDirectoryName(path);
+                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory)) 
+                    Directory.CreateDirectory(directory);
+                
+                File.WriteAllBytes(path, exrBytes.ToArray());
+                Mod.LOG.Info($"EXR Screenshot Success: {width}x{height} saved to {path}");
             }
-
-            int width = Screen.width;
-            int height = Screen.height;
-            int scaleFactor = 1; // Default scale factor.
-
-            // Get the m_TakeSuperResolution setting.
-            if (mSettingTakeSuperResolution)
-            {
-                // Take a supersize screenshot that is *at least* 2160 pixels (4K).
-                // Height is better than width because of widescreen monitors.
-                // the resulting image is bigger. credit Toverux
-                 scaleFactor = (int)Math.Ceiling(2160d / height);
-                 //Mod.LOG.Info($"EXR Screenshot: Super Resolution enabled, scaleFactor = {scaleFactor}");
+            catch (System.Exception e) 
+            { 
+                Mod.LOG.Error($"{e.Message}"); 
             }
-
-
-            //Mod.LOG.Info($"EXR Screenshot: Super Resolution disabled, scaleFactor = {scaleFactor}");
-            // Create a RenderTexture with the supersized resolution
-            width *= scaleFactor;
-            height *= scaleFactor;
-
-            // Initialise the descriptor
-            RenderTextureDescriptor descriptor = new RenderTextureDescriptor(width, height, RenderTextureFormat.ARGBFloat, 32);
-
-            // Force Linear
-            descriptor.sRGB = false; 
-
-            // Set remaining properties
-            descriptor.msaaSamples = 1;
-            descriptor.useMipMap = false;
-            
-            
-            RenderTexture renderTexture = new RenderTexture(descriptor)
-            {
-                antiAliasing = QualitySettings.antiAliasing,
-                useDynamicScale = false,
-                enableRandomWrite = false
-            };
-            if (renderTexture == null)
-            {
-                Mod.LOG.Error("EXR Screenshot: Failed to create HDR RenderTexture.");
-                return;
-            }
-            gameCamera.targetTexture = renderTexture;
-            Mod.LOG.Info($"EXR Screenshot: HDR RenderTexture created: {width}x{height} format={renderTexture.format} {descriptor.depthBufferBits} Bits");
-
-            CaptureScreenshot(gameCamera, renderTexture);
-
-            Texture2D texture = new Texture2D(width, height, TextureFormat.RGBAFloat, false, true);
-            RenderTexture.active = renderTexture;
-            texture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
-            texture.Apply();
-            //Mod.LOG.Info("EXR Screenshot: Pixels read from HDR RenderTexture to HDR Texture2D.");
-
-            byte[] exrBytes = texture.EncodeToEXR();
-            string exrFilename = $"Screenshot_{DateTime.Now:yyyyMMdd_HHmmss}_{_screenshotCount}_{renderTexture.descriptor.colorFormat}_{renderTexture.descriptor.depthBufferBits}_Bits.exr";
-            string exrPath = Path.Combine(Application.persistentDataPath, "Screenshots", "EXR", exrFilename);
-            Directory.CreateDirectory(Path.GetDirectoryName(exrPath) ?? string.Empty);
-            File.WriteAllBytes(exrPath, exrBytes);
-            Mod.LOG.Info($"EXR Screenshot: Screenshot saved to: {exrPath}");
-
-            /* Taking Debug PNG files will look very dark as trying to save Linear to RGB without gamma transform or something like that
-            // linear data is being forced into a gamma container
-            byte[] pngBytes = texture.EncodeToPNG();
-            string pngFilename = $"Screenshot_DEBUG_{DateTime.Now:yyyyMMdd_HHmmss}_{_screenshotCount}.png";
-            string pngPath = Path.Combine(Application.persistentDataPath, "Screenshots", "EXR Debug", pngFilename);
-            Directory.CreateDirectory(Path.GetDirectoryName(pngPath));
-            File.WriteAllBytes(pngPath, pngBytes);
-            Mod.LOG.Info($"EXR Screenshot: Linear EXR screenshot (DEBUG PNG) saved to: {pngPath}");
-            */
-            
-            _screenshotCount++;
-
-            gameCamera.targetTexture = null;
-            RenderTexture.active = null;
-            Object.Destroy(texture);
-            Object.Destroy(renderTexture);
-            // Mod.LOG.Info("EXR Screenshot: Cleanup complete.");
         }
     }
 }

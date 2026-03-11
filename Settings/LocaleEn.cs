@@ -31,9 +31,12 @@ namespace EXRScreenshot.Settings
                 { setting.GetBindingKeyLocaleID(Mod.TakeScreenshotActionName), "TakeScreenshot Key" },
                 { setting.GetBindingMapLocaleID(), "EXR Screenshot Mod Settings" },
                 
+                
                 // ModeDropdown
+                /*
                 { setting.GetOptionLabelLocaleID(nameof(Setting.ModeDropdown)), "Screenshot Mode" },
                 { setting.GetOptionDescLocaleID(nameof(Setting.ModeDropdown)), "Choose method for taking screenshots \n**New Method** grabs screenshot from  buffer before post processing \n**Old Method** grabs the screenshot after post process"},
+                */
                 
                 // ScreenshotMethodEnum labels
                 { setting.GetEnumValueLocaleID(Setting.ScreenshotMethodEnum.NewMethod), "New Method" },
@@ -47,7 +50,7 @@ namespace EXRScreenshot.Settings
 
                 // Super Resolution settings labels and descriptions
                 { setting.GetOptionLabelLocaleID(nameof(Setting.TakeSuperResolution)), "Take Super Resolution Screenshots" },
-                { setting.GetOptionDescLocaleID(nameof(Setting.TakeSuperResolution)), "Enable to take screenshots at minimum 4K resolution else doubles your resolution potentially making big files" },
+                { setting.GetOptionDescLocaleID(nameof(Setting.TakeSuperResolution)), "Does not work currently" },
                 { setting.GetOptionLabelLocaleID(nameof(Setting.SupersampleScale)), "Screenshots Scale" },
                 { setting.GetOptionDescLocaleID(nameof(Setting.SupersampleScale)), "Change final scale of the screenshot \n Currently not working correct keep it at 1" },
                 

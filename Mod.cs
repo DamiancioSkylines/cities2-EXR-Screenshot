@@ -48,23 +48,12 @@ namespace EXRScreenshot
                     var timestamp = System.DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
                     var folderPath = Path.Combine(Application.persistentDataPath, "Screenshots", "EXR");
                     var filePath = Path.Combine(folderPath, $"Screenshot_{timestamp}.exr");
-
-                    switch (Setting.ModeDropdown)
-                    {
-                        case Setting.ScreenshotMethodEnum.NewMethod:
-                            EXRRecorder recorder = new EXRRecorder();
-                            // Get value from mod settings
-                            // float currentScale = Setting.SupersampleScale; 
-                            // Do high-fidelity capture
-                            recorder.CaptureProEXR(filePath, Setting.SupersampleScale);
-                            break;
-                        case Setting.ScreenshotMethodEnum.OldMethod:
-                            LOG.Info("EXR Screenshot: Hotkey for TakeScreenshot activated");
-                            // Do high-fidelity normal screenshot
-                            MakingScreenshot.TakeScreenshot(Setting.TakeSuperResolution);
-                        break;
-                    }
                     
+                    EXRScreenshotSystem screenshotSystem = new EXRScreenshotSystem();
+                    // Get value from mod settings
+                    // float currentScale = Setting.SupersampleScale; 
+                    // Do high-fidelity capture
+                    screenshotSystem.CaptureProEXR(filePath, Setting.SupersampleScale);
                 }
             };
 

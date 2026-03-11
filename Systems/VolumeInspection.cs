@@ -1,6 +1,5 @@
 using System;
 using System.Reflection;
-using Colossal.Logging;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.HighDefinition;
