@@ -59,7 +59,7 @@ namespace EXRScreenshot.Systems
             var targetVolume = Object.FindObjectsByType<CustomPassVolume>(FindObjectsSortMode.None)
                 .FirstOrDefault(v => v.name == "EXR_Capture_Volume");
             
-            if (targetVolume == null)
+            if (!targetVolume)
             {
                 targetVolume = new GameObject("EXR_Capture_Volume").AddComponent<CustomPassVolume>();
                 targetVolume.isGlobal = true; 
