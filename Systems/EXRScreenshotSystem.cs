@@ -118,7 +118,7 @@ namespace EXRScreenshot.Systems
                             var dir = Path.GetDirectoryName(path);
                             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
                             File.WriteAllBytes(path, encodedBytes);
-                            Mod.LOG.Info($"Saved EXR: {path} ({targetWidth}x{targetHeight}) using {Mod.Setting.CompressionDropdown}");
+                            Mod.LOG.Info($"Saved EXR: {path} ({targetWidth}x{targetHeight}) using compression {Mod.Setting.CompressionDropdown}");
                         }
                         catch (Exception e) {
                             Mod.LOG.Error($"IO Error: {e.Message}");
