@@ -47,17 +47,15 @@ namespace EXRScreenshot.Systems
             captureRT.Create();
             var captureRTHandle = RTHandles.Alloc(captureRT);
             
-            // --------------------------------------------------------
-            // 1. Force Camera to recognize the high-res target
+            // 3. Force Camera to recognize the high-res target
             RenderTexture superResRT = RenderTexture.GetTemporary(targetWidth, targetHeight, 24, RenderTextureFormat.DefaultHDR);
             RenderTexture originalTarget = mainCam.targetTexture;
             mainCam.targetTexture = superResRT;
-            // 2. Resize RTHandle system so G-Buffers (Depth/Normals) match the target
+            // Resize RTHandle system so G-Buffers (Depth/Normals) match the target
             RTHandles.SetReferenceSize(targetWidth, targetHeight);
-            // --------------------------------------------------------
+
             
-            
-            // 3. Setup Custom Pass Reformat this code ToDo
+            // 4. Setup Custom Pass
             var targetVolume = Object.FindObjectsByType<CustomPassVolume>(FindObjectsSortMode.None)
                 .FirstOrDefault(v => v.name == "EXR_Capture_Volume");
             
@@ -123,7 +121,11 @@ namespace EXRScreenshot.Systems
             // --------------------------------------------------------
             mainCam.targetTexture = originalTarget;
             RenderTexture.ReleaseTemporary(superResRT);
-            RTHandles.SetReferenceSize(originalScreenWidth, originalScreenHeight);
+            // As we need to render to a higher resolution than normal for a short period of time.
+            // And after takin screenshot we do not require this resolution anymore, the additional memory allocated is wasted.
+            // To avoid that, only way  reset the current maximum resolution is using ResetReferenceSize instead of SetReferenceSize that can only increase but not decrease size.
+            // https://docs.unity3d.com/Packages/com.unity.render-pipelines.core@13.1/manual/rthandle-system-using.html
+            RTHandles.ResetReferenceSize(originalScreenWidth, originalScreenHeight);
             // --------------------------------------------------------
             
             // 6. Restore Buffer size
