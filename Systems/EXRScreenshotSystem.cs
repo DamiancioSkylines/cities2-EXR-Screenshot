@@ -30,7 +30,7 @@ namespace EXRScreenshot.Systems
         private IEnumerator CaptureRoutine()
         {
             var mainCam = Camera.main;
-            // This is only for highly unlikely 'System.NullReferenceException' 
+            // This is only for highly unlikely NRE 'System.NullReferenceException' 
             if (!mainCam) yield break;
             
             // 1. Prepare Target Size for Render Target Texture
@@ -114,11 +114,10 @@ namespace EXRScreenshot.Systems
             };
             
             capturePass.RequestFrame();
-            
+            // Wait for the frame to be captured
             yield return new WaitUntil(() => frameCaptured);
-            yield return new WaitUntil(() => readbackFinished);
-
-            // --------------------------------------------------------
+            
+            // Restore Camera stuff after frame has been captured
             mainCam.targetTexture = originalTarget;
             RenderTexture.ReleaseTemporary(superResRT);
             // As we need to render to a higher resolution than normal for a short period of time.
@@ -126,12 +125,12 @@ namespace EXRScreenshot.Systems
             // To avoid that, only way  reset the current maximum resolution is using ResetReferenceSize instead of SetReferenceSize that can only increase but not decrease size.
             // https://docs.unity3d.com/Packages/com.unity.render-pipelines.core@13.1/manual/rthandle-system-using.html
             RTHandles.ResetReferenceSize(originalScreenWidth, originalScreenHeight);
-            // --------------------------------------------------------
-            
-            // 6. Restore Buffer size
             if (scale > 1.0f) ScalableBufferManager.ResizeBuffers(1.0f, 1.0f);
             
-            // Cleanup
+            // Wait for readback/disk — game should already be running normally
+            yield return new WaitUntil(() => readbackFinished);
+            
+            // Clean-up captureRT stays alive until readback is done, aka consumed band no longer needed by the camera. THEN release
             if (targetVolume) targetVolume.customPasses.Remove(capturePass);
             captureRTHandle.Release();
             captureRT.Release();
