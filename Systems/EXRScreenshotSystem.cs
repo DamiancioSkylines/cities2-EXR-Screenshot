@@ -137,8 +137,8 @@ namespace EXRScreenshot.Systems
             // Restore Camera stuff after frame has been captured
             mainCam.targetTexture = originalTarget;
             RenderTexture.ReleaseTemporary(superResRT);
-            // As we need to render to a higher resolution than normal for a short period of time.
-            // And after takin screenshot we do not require this resolution anymore, the additional memory allocated is wasted.
+            // As we need to render to a higher resolution than normal for a short period of time when we want Super Sample.
+            // And after takin screenshot we do not require this resolution any more, the additional memory allocated is wasted.
             // To avoid that, only way  reset the current maximum resolution is using ResetReferenceSize instead of SetReferenceSize that can only increase but not decrease size.
             // https://docs.unity3d.com/Packages/com.unity.render-pipelines.core@13.1/manual/rthandle-system-using.html
             RTHandles.ResetReferenceSize(originalScreenWidth, originalScreenHeight);
