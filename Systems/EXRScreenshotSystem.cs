@@ -86,30 +86,47 @@ namespace EXRScreenshot.Systems
                 
                 ctx.cmd.RequestAsyncReadback(captureRT, request => {
                     if (request.hasError) {
-                        Mod.LOG.Error("GPU Readback error: The request returned an error state.");
-                    } else {
-                        var data = request.GetData<byte>();
-                        var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
-                        var path = Path.Combine(Application.persistentDataPath, "Screenshots", "EXR", $"Screenshot_{timestamp}.exr");
-                        
-                        var dir = Path.GetDirectoryName(path);
-                        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-
-                        var exrBytes = ImageConversion.EncodeNativeArrayToEXR(
-                            data, 
-                            captureRT.graphicsFormat, 
-                            (uint)targetWidth, 
-                            (uint)targetHeight, 
-                            0, 
-                            Texture2D.EXRFlags.CompressZIP
-                        );
-                        
-                        File.WriteAllBytes(path, exrBytes.ToArray());
-                        exrBytes.Dispose();
-                        
-                        Mod.LOG.Info($"Saved EXR: {path} ({targetWidth}x{targetHeight})");
+                        Mod.LOG.Error("GPU Readback error.");
+                        readbackFinished = true;
+                        return;
                     }
-                    readbackFinished = true;
+                    
+                    //Cast custom enum to Unity's expected EXRFlags
+                    var compressionFlag = (Texture2D.EXRFlags)Mod.Setting.CompressionDropdown;
+                    
+                    // EncodeNativeArrayToEXR is a Unity API — must run on main thread.
+                    var exrBytes = ImageConversion.EncodeNativeArrayToEXR(
+                        request.GetData<byte>(),
+                        captureRT.graphicsFormat,
+                        (uint)targetWidth,
+                        (uint)targetHeight,
+                        0,
+                        compressionFlag
+                        //Texture2D.EXRFlags.CompressZIP
+                    );
+
+                    // Copy encoded bytes to managed array before handing off.
+                    // NativeArray and exrBytes are only valid on this thread.
+                    var encodedBytes = exrBytes.ToArray();
+                    exrBytes.Dispose();
+
+                    // Only the file write goes to background thread — safe, no Unity APIs.
+                    System.Threading.Tasks.Task.Run(() => {
+                        try {
+                            var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+                            var path = Path.Combine(Application.persistentDataPath, "Screenshots", "EXR", $"Screenshot_{timestamp}.exr");
+                            var dir = Path.GetDirectoryName(path);
+                            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+                            File.WriteAllBytes(path, encodedBytes);
+                            Mod.LOG.Info($"Saved EXR: {path} ({targetWidth}x{targetHeight}) using {Mod.Setting.CompressionDropdown}");
+                        }
+                        catch (Exception e) {
+                            Mod.LOG.Error($"IO Error: {e.Message}");
+                        }
+                        finally {
+                            readbackFinished = true;
+                        }
+                    });
                 });
             };
             

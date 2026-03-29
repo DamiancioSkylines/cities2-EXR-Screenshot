@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using Colossal.IO.AssetDatabase;
 using Game.Input;
 using Game.Modding;
@@ -46,6 +47,18 @@ namespace EXRScreenshot.Settings
             OldMethod = 1,
         }
         
+        
+        [SuppressMessage("ReSharper", "InconsistentNaming")]
+        public enum CompressionMethodEnum
+        {
+            None = 0,
+            //OutputAsFloat = 1, // Float is 32 bit per channel, instead of 16-bit that actual game colour buffer is. For mod use case it just doubles the size of file for no gain.
+            CompressZIP = 2,
+            CompressRLE = 4,
+            CompressPIZ = 8,
+        }
+
+
         [SettingsUIKeyboardBinding(BindingKeyboard.F1, Mod.TakeScreenshotActionName, shift: true)]
         [SettingsUISection(MainTab, SettingsGroup)]
         public ProxyBinding KeyTakeScreenshot { get; set; }
@@ -58,6 +71,11 @@ namespace EXRScreenshot.Settings
         [SettingsUISection(MainTab, SettingsGroup)]
         public ScreenshotMethodEnum ModeDropdown { get; set; } = ScreenshotMethodEnum.NewMethod;
         
+        /// <summary>
+        /// Gets or sets the currently selected screenshot compression method.
+        /// </summary>
+        [SettingsUISection(MainTab, SettingsGroup)]
+        public CompressionMethodEnum CompressionDropdown { get; set; } = CompressionMethodEnum.CompressPIZ;
         
         //[SettingsUIHidden]
         [SettingsUISection(MainTab, SettingsGroup)]
@@ -121,6 +139,7 @@ namespace EXRScreenshot.Settings
             TakeSuperResolution = false;
             SupersampleScale = 1.0f;
             ModeDropdown = ScreenshotMethodEnum.NewMethod;
+            CompressionDropdown = CompressionMethodEnum.CompressPIZ;
         }
     }
 }
