@@ -34,6 +34,8 @@ namespace EXRScreenshot.Systems
             if (!mainCam) yield break;
             
             // 1. Prepare Target Size for Render Target Texture
+            var originalScreenWidth = Screen.width;
+            var originalScreenHeight = Screen.height;
             var scale = Mod.Setting.TakeSuperResolution ? Mod.Setting.SupersampleScale : 1.0f;
             var targetWidth = Mathf.RoundToInt(mainCam.pixelWidth * scale);
             var targetHeight = Mathf.RoundToInt(mainCam.pixelHeight * scale);
@@ -44,7 +46,17 @@ namespace EXRScreenshot.Systems
             captureRT.name = "EXR_Capture_Target";
             captureRT.Create();
             var captureRTHandle = RTHandles.Alloc(captureRT);
-
+            
+            // --------------------------------------------------------
+            // 1. Force Camera to recognize the high-res target
+            RenderTexture superResRT = RenderTexture.GetTemporary(targetWidth, targetHeight, 24, RenderTextureFormat.DefaultHDR);
+            RenderTexture originalTarget = mainCam.targetTexture;
+            mainCam.targetTexture = superResRT;
+            // 2. Resize RTHandle system so G-Buffers (Depth/Normals) match the target
+            RTHandles.SetReferenceSize(targetWidth, targetHeight);
+            // --------------------------------------------------------
+            
+            
             // 3. Setup Custom Pass Reformat this code ToDo
             var targetVolume = Object.FindObjectsByType<CustomPassVolume>(FindObjectsSortMode.None)
                 .FirstOrDefault(v => v.name == "EXR_Capture_Volume");
@@ -63,18 +75,17 @@ namespace EXRScreenshot.Systems
                 targetVolume.customPasses.Add(capturePass);
             }
             
-            var readbackFinished = false;
-            
             // 5. Change size of Buffers
             if (scale > 1.0f) ScalableBufferManager.ResizeBuffers(scale, scale);
             
-            capturePass.RequestFrame();
-            
+            var readbackFinished = false;
+            var frameCaptured = false;
             
             capturePass.OnBufferReady = (ctx, hdrBuffer) =>
             {
                 HDUtils.BlitCameraTexture(ctx.cmd, hdrBuffer, captureRTHandle);
-
+                frameCaptured = true;
+                
                 ctx.cmd.RequestAsyncReadback(captureRT, request => {
                     if (request.hasError) {
                         Mod.LOG.Error("GPU Readback error: The request returned an error state.");
@@ -103,21 +114,25 @@ namespace EXRScreenshot.Systems
                     readbackFinished = true;
                 });
             };
-
-            // 6. Restore Buffer size
-            if (scale > 1.0f)
-            {
-                ScalableBufferManager.ResizeBuffers(1.0f, 1.0f);
-            }
-
+            
+            capturePass.RequestFrame();
+            
+            yield return new WaitUntil(() => frameCaptured);
             yield return new WaitUntil(() => readbackFinished);
 
+            // --------------------------------------------------------
+            mainCam.targetTexture = originalTarget;
+            RenderTexture.ReleaseTemporary(superResRT);
+            RTHandles.SetReferenceSize(originalScreenWidth, originalScreenHeight);
+            // --------------------------------------------------------
+            
+            // 6. Restore Buffer size
+            if (scale > 1.0f) ScalableBufferManager.ResizeBuffers(1.0f, 1.0f);
+            
             // Cleanup
             if (targetVolume) targetVolume.customPasses.Remove(capturePass);
-            
             captureRTHandle.Release();
             captureRT.Release();
-            // Dead code candidate
             Object.Destroy(captureRT);
             
             Mod.LOG.Info("EXR capture routine complete.");
