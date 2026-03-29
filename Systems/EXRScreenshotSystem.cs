@@ -1,14 +1,14 @@
 using UnityEngine;
 using UnityEngine.Rendering;
-using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering.HighDefinition;
+using UnityEngine.Experimental.Rendering;
 using Unity.Collections;
+using System;
 using System.Collections;
 using System.IO;
 using System.Linq;
 using EXRScreenshot.Settings;
 using Game.SceneFlow;
-using Game.UI;
 
 namespace EXRScreenshot.Systems
 {
@@ -16,137 +16,170 @@ namespace EXRScreenshot.Systems
     {
         public static EXRScreenshotSystem Instance;
 
+        // We use R16G16B16A16_SFloat (RGBAHalf) as it is the most compatible 
+        // high-bit-depth format for Unity's EXR encoder.
+        private static readonly GraphicsFormat CaptureFormat = GraphicsFormat.R16G16B16A16_SFloat;
+        private bool _isCapturing = false;
+
         public EXRScreenshotSystem()
         {
-            if (Instance != null) Mod.LOG.Warn("Duplicate EXRScreenshotSystem detected.");
             Instance = this;
             Mod.LOG.Info("EXRScreenshotSystem initialized.");
         }
 
         public void CaptureEXR()
         {
-            GameManager.instance.StartCoroutine(CaptureRoutine());
+            if (_isCapturing) return;
+            GameManager.instance.StartCoroutine(CaptureSequence());
         }
 
-        private IEnumerator CaptureRoutine()
+        private IEnumerator CaptureSequence()
         {
-            if (Mod.Setting == null) yield break;
+            _isCapturing = true;
 
-            Camera mainCam = Camera.main;
-            if (mainCam == null) yield break;
+            // 1. Calculate target resolution
+            float scale = Mod.Setting.SupersampleScale;
+            int width = Mathf.RoundToInt(Screen.width * scale);
+            int height = Mathf.RoundToInt(Screen.height * scale);
+
+            Mod.LOG.Info($"[Capture] Starting sequence: {width}x{height} (Scale: {scale}x)");
+
+            // 2. Prepare Camera and Force Resolution Scale
+            var mainCam = Camera.main;
+            if (mainCam == null)
+            {
+                Mod.LOG.Error("Main Camera not found.");
+                _isCapturing = false;
+                yield break;
+            }
 
             var hdData = mainCam.GetComponent<HDAdditionalCameraData>();
-            if (hdData == null) yield break;
+            bool originalAllowDynamicRes = hdData.allowDynamicResolution;
 
-            float scale = Mod.Setting.TakeSuperResolution ? Mod.Setting.SupersampleScale : 1.0f;
-            int targetWidth = Mathf.RoundToInt(mainCam.pixelWidth * scale);
-            int targetHeight = Mathf.RoundToInt(mainCam.pixelHeight * scale);
-
-            Mod.LOG.Info($"Initiating Raw Linear EXR Capture: {targetWidth}x{targetHeight} (Scale: {scale}x)");
-
-            // 1. Setup Capture Texture 
-            RenderTexture captureRT = new RenderTexture(targetWidth, targetHeight, 0, GraphicsFormat.R16G16B16A16_SFloat);
-            captureRT.name = "EXR_Capture_Target";
-            captureRT.Create();
-
-            // HDRP requires RTHandles for its utility methods
-            RTHandle captureHandle = RTHandles.Alloc(captureRT);
-
-            // 2. Setup Custom Pass
-            CustomPassVolume targetVolume = Object.FindObjectsByType<CustomPassVolume>(FindObjectsSortMode.None)
-                .FirstOrDefault(v => v.name == "EXR_Capture_Volume");
-
-            if (targetVolume == null)
+            try 
             {
-                targetVolume = new GameObject("EXR_Capture_Volume").AddComponent<CustomPassVolume>();
-                targetVolume.isGlobal = true; 
+                // Force engine to 100% scale using the enum index fix for CS1117
+                DynamicResolutionHandler.SetDynamicResScaler(() => 100f, (DynamicResScalePolicyType)1);
+                DynamicResolutionHandler.SetActiveDynamicScalerSlot(DynamicResScalerSlot.User);
+                hdData.allowDynamicResolution = true;
+                
+                // Re-initialize RTHandles for the high-res pass
+                RTHandles.SetReferenceSize(width, height);
             }
-            
-            targetVolume.injectionPoint = CustomPassInjectionPoint.BeforePostProcess;
-            var capturePass = targetVolume.customPasses.OfType<EXRCapturePass>().FirstOrDefault();
-            if (capturePass == null)
+            catch (Exception e)
             {
-                capturePass = new EXRCapturePass();
-                targetVolume.customPasses.Add(capturePass);
+                Mod.LOG.Error($"[Setup Error] {e.Message}");
             }
 
-            // 3. State Management
-            int originalCullingMask = mainCam.cullingMask;
-            bool wasUiVisible = GameManager.instance.userInterface.view.enabled;
-            bool readbackFinished = false;
+            // 3. Setup the Capture Pass and Volume
+            var (volume, pass) = GetOrCreateCapturePass();
+            RTHandle captureRT = RTHandles.Alloc(
+                width, height, 
+                colorFormat: CaptureFormat, 
+                name: "EXRCaptureTemp",
+                useDynamicScale: false // Crucial: Don't let the engine scale this one
+            );
 
-            capturePass.OnBufferReady = (ctx, hdrBuffer) =>
+            bool bufferReady = false;
+            pass.OnBufferReady = (ctx, cameraBuffer) =>
             {
-                // Now passing the RTHandle instead of the RenderTexture to satisfy HDUtils.BlitCameraTexture
-                HDUtils.BlitCameraTexture(ctx.cmd, hdrBuffer, captureHandle);
-
-                ctx.cmd.RequestAsyncReadback(captureRT, (AsyncGPUReadbackRequest request) => {
-                    if (request.hasError) {
-                        Mod.LOG.Error("GPU Readback error: The request returned an error state.");
-                    } else {
-                        var data = request.GetData<byte>();
-                        string timestamp = System.DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
-                        string path = Path.Combine(Application.persistentDataPath, "Screenshots", "EXR", $"Screenshot_{timestamp}.exr");
-                        
-                        string dir = Path.GetDirectoryName(path);
-                        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-
-                        var exrBytes = ImageConversion.EncodeNativeArrayToEXR(
-                            data, 
-                            captureRT.graphicsFormat, 
-                            (uint)targetWidth, 
-                            (uint)targetHeight, 
-                            0, 
-                            Texture2D.EXRFlags.CompressZIP
-                        );
-                        
-                        File.WriteAllBytes(path, exrBytes.ToArray());
-                        exrBytes.Dispose();
-                        
-                        Mod.LOG.Info($"Saved Valid EXR: {path} ({targetWidth}x{targetHeight})");
-                    }
-                    readbackFinished = true;
-                });
+                // Blit from the camera buffer (which is now high-res) to our capture RT
+                // This also handles format conversion to RGBAHalf
+                ctx.cmd.Blit(cameraBuffer, captureRT);
+                bufferReady = true;
             };
 
-            // 4. Trigger Rendering
-            GameManager.instance.userInterface.view.enabled = false;
-            mainCam.cullingMask &= ~(1 << 5); 
+            // Wait for reallocation to settle (approx 15-20 frames)
+            for (int i = 0; i < 20; i++) yield return new WaitForEndOfFrame();
 
-            if (scale > 1.0f)
+            // Request the frame
+            pass.RequestFrame();
+
+            // Wait until the pass has executed
+            float timeout = Time.realtimeSinceStartup + 2.0f;
+            while (!bufferReady && Time.realtimeSinceStartup < timeout)
             {
-                ScalableBufferManager.ResizeBuffers(scale, scale);
+                yield return null;
             }
 
-            for (int i = 0; i < 20; i++)
+            if (bufferReady)
             {
-                yield return new WaitForEndOfFrame();
+                // 4. Readback and Save
+                AsyncGPUReadback.Request(captureRT, 0, CaptureFormat, (request) =>
+                {
+                    if (request.hasError)
+                    {
+                        Mod.LOG.Error("GPU Readback error.");
+                    }
+                    else
+                    {
+                        var data = request.GetData<byte>();
+                        SaveEXR(data, CaptureFormat, width, height);
+                    }
+                });
             }
-            
-            capturePass.RequestFrame();
-            
-            yield return new WaitForEndOfFrame();
-            yield return new WaitForEndOfFrame();
-
-            // 5. Restore State
-            if (scale > 1.0f)
+            else
             {
-                ScalableBufferManager.ResizeBuffers(1.0f, 1.0f);
+                Mod.LOG.Error("Capture timed out or failed to trigger.");
             }
-            
-            mainCam.cullingMask = originalCullingMask;
-            GameManager.instance.userInterface.view.enabled = wasUiVisible;
 
-            yield return new WaitUntil(() => readbackFinished);
-
-            // Cleanup
-            if (targetVolume != null) targetVolume.customPasses.Remove(capturePass);
+            // 5. Cleanup
+            Mod.LOG.Info("[Cleanup] Reverting changes...");
+            hdData.allowDynamicResolution = originalAllowDynamicRes;
+            RTHandles.SetReferenceSize(Screen.width, Screen.height);
             
-            captureHandle.Release(); // Release the RTHandle wrapper
+            pass.OnBufferReady = null;
             captureRT.Release();
-            Object.Destroy(captureRT);
+            Cleanup(volume, pass);
             
-            Mod.LOG.Info("EXR capture sequence complete.");
+            _isCapturing = false;
+        }
+
+        private (CustomPassVolume, EXRCapturePass) GetOrCreateCapturePass()
+        {
+            var volObj = GameObject.Find("EXR_Capture_Volume");
+            if (volObj == null) volObj = new GameObject("EXR_Capture_Volume");
+
+            var vol = volObj.GetComponent<CustomPassVolume>() ?? volObj.AddComponent<CustomPassVolume>();
+            vol.injectionPoint = CustomPassInjectionPoint.AfterPostProcess; // Capture final output
+
+            var pass = vol.customPasses.OfType<EXRCapturePass>().FirstOrDefault();
+            if (pass == null)
+            {
+                pass = new EXRCapturePass();
+                vol.customPasses.Add(pass);
+            }
+
+            return (vol, pass);
+        }
+
+        private void Cleanup(CustomPassVolume volume, EXRCapturePass pass)
+        {
+            if (volume != null) volume.customPasses.Remove(pass);
+        }
+
+        private void SaveEXR(NativeArray<byte> rawData, GraphicsFormat format, int width, int height)
+        {
+            try
+            {
+                string timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+                string folder = Path.Combine(Application.persistentDataPath, "Screenshots", "EXR");
+                string filePath = Path.Combine(folder, $"Screenshot_{timestamp}.exr");
+
+                if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
+
+                var exrData = ImageConversion.EncodeNativeArrayToEXR(
+                    rawData, format, (uint)width, (uint)height, 0, Texture2D.EXRFlags.CompressZIP);
+                
+                File.WriteAllBytes(filePath, exrData.ToArray());
+                exrData.Dispose();
+
+                Mod.LOG.Info($"[IO] High-Res EXR Saved: {width}x{height} at {filePath}");
+            }
+            catch (Exception e)
+            {
+                Mod.LOG.Error($"IO Error: {e.Message}");
+            }
         }
     }
 }
