@@ -45,11 +45,10 @@ namespace EXRScreenshot.Systems
             captureRT.Create();
             var captureRTHandle = RTHandles.Alloc(captureRT);
 
-            // 3. Setup Custom Pass
+            // 3. Setup Custom Pass Reformat this code ToDo
             var targetVolume = Object.FindObjectsByType<CustomPassVolume>(FindObjectsSortMode.None)
                 .FirstOrDefault(v => v.name == "EXR_Capture_Volume");
-
-            // Possibly dead code
+            
             if (targetVolume == null)
             {
                 targetVolume = new GameObject("EXR_Capture_Volume").AddComponent<CustomPassVolume>();
@@ -65,7 +64,13 @@ namespace EXRScreenshot.Systems
             }
             
             var readbackFinished = false;
-
+            
+            // 5. Change size of Buffers
+            if (scale > 1.0f) ScalableBufferManager.ResizeBuffers(scale, scale);
+            
+            capturePass.RequestFrame();
+            
+            
             capturePass.OnBufferReady = (ctx, hdrBuffer) =>
             {
                 HDUtils.BlitCameraTexture(ctx.cmd, hdrBuffer, captureRTHandle);
@@ -98,20 +103,6 @@ namespace EXRScreenshot.Systems
                     readbackFinished = true;
                 });
             };
-
-            // 5. Change size of Buffers
-            if (scale > 1.0f)
-            {
-                ScalableBufferManager.ResizeBuffers(scale, scale);
-            }
-
-            // Waiting 20 frames was pointless 1 is enough
-            yield return new WaitForEndOfFrame();
-            
-            capturePass.RequestFrame();
-            
-            yield return new WaitForEndOfFrame();
-            yield return new WaitForEndOfFrame();
 
             // 6. Restore Buffer size
             if (scale > 1.0f)
