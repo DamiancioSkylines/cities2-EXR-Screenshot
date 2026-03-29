@@ -24,12 +24,12 @@ namespace EXRScreenshot.Settings
     // Define tab order e.g
     // [SettingsUITabOrder(MainTab, KSecondTab)]
 
-    [SettingsUIKeyboardAction(Mod.TakeScreenshotActionName, ActionType.Button, usages: new string[] { Usages.kMenuUsage, "MyUsage" }, interactions: new string[] { "UIButton" })]
+    [SettingsUIKeyboardAction(Mod.TakeScreenshotActionName, usages: new [] { Usages.kMenuUsage, "MyUsage" }, interactions: new [] { "UIButton" })]
     public class Setting : ModSetting
     {
         public const string MainTab = "MainTab";
-        public const string ResetGroup = "EXRResetGroup";
         public const string SettingsGroup = "EXRSettingsGroup";
+        public const string ResetGroup = "EXRResetGroup";
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Setting"/> class.
@@ -59,12 +59,12 @@ namespace EXRScreenshot.Settings
         public ScreenshotMethodEnum ModeDropdown { get; set; } = ScreenshotMethodEnum.NewMethod;
         
         
-        [SettingsUIHidden]
+        //[SettingsUIHidden]
         [SettingsUISection(MainTab, SettingsGroup)]
         [SettingsUISlider(min = 1.0f, max = 4.0f, step = 0.5f, unit = "Scale")]
         public float SupersampleScale { get; set; } = 1.0f;
         
-        [SettingsUIHidden]
+        //[SettingsUIHidden]
         [SettingsUISection(MainTab, SettingsGroup)]
         public bool TakeSuperResolution { get; set; }
         

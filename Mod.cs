@@ -15,8 +15,8 @@ namespace EXRScreenshot
     public class Mod : IMod
     {
         public static readonly ILog LOG = LogManager.GetLogger(nameof(EXRScreenshot)).SetShowsErrorsInUI(false);
-        private static Setting Setting { get; set; }
-        
+        public static Setting Setting { get; private set; }
+
         private static ProxyAction _takeScreenshotAction;
         public const string TakeScreenshotActionName = "TakeScrenshot";
 
@@ -25,8 +25,10 @@ namespace EXRScreenshot
             Setting = new Setting(this);
             Setting.RegisterInOptionsUI();
             GameManager.instance.localizationManager.AddSource("en-US", new LocaleEn(Setting));
-            if (Setting.DebugLogging) {LOG.Info(nameof(OnLoad));}
-            
+
+            // Instantiate the system once. The constructor sets EXRScreenshotSystem.Instance.
+            new EXRScreenshotSystem();
+
             Setting.RegisterKeyBindings();
 
             _takeScreenshotAction = Setting.GetAction(TakeScreenshotActionName);
@@ -34,20 +36,26 @@ namespace EXRScreenshot
 
             _takeScreenshotAction.onInteraction += (_, phase) =>
             {
-                var screenshotSystem = new EXRScreenshotSystem();
-                if (phase == InputActionPhase.Canceled)
+                if (phase != InputActionPhase.Canceled) return;
+
+                if (EXRScreenshotSystem.Instance != null)
                 {
-                    if (Setting.DebugLogging) { VolumeInspection.LogGlobalStack();}
-                    screenshotSystem.CaptureEXR();
+                    if (Setting.DebugLogging) VolumeInspection.LogGlobalStack();
+                    EXRScreenshotSystem.Instance.CaptureEXR();
+                }
+                else
+                {
+                    LOG.Error("EXRScreenshotSystem is not initialized!");
                 }
             };
 
             AssetDatabase.global.LoadSettings(nameof(EXRScreenshot), Setting, new Setting(this));
+
+            if (Setting.DebugLogging) LOG.Info(nameof(OnLoad));
         }
-        
+
         public void OnDispose()
         {
-            // LOG.Info(nameof(OnDispose));
             if (Setting != null)
             {
                 Setting.UnregisterInOptionsUI();

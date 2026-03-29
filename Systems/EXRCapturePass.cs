@@ -1,36 +1,31 @@
-using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.HighDefinition;
 using JetBrains.Annotations;
 
 namespace EXRScreenshot.Systems
 {
-    [UsedImplicitly] // the class is being used by an external framework (Unity)
+    [UsedImplicitly]
     public class EXRCapturePass : CustomPass
     {
-        public System.Action<RTHandle> OnBufferReady;
+        // Full context passed so we can use ctx.cmd (pipeline command buffer)
+        // and ctx.hdCamera.actualWidth/actualHeight to verify rendered size.
+        public System.Action<CustomPassContext, RTHandle> OnBufferReady;
         private bool _requestCapture;
 
         public void RequestFrame() => _requestCapture = true;
 
         protected override void Execute(CustomPassContext ctx)
         {
-            // Capture the Game Camera, not the UI or Scene cameras
-            if (!_requestCapture || ctx.hdCamera.camera.cameraType != CameraType.Game)
+            if (!_requestCapture || ctx.hdCamera.camera.cameraType != UnityEngine.CameraType.Game)
                 return;
 
-            // This is the RAW HDR light data (Linear 16bit Float)
-            // This buffer is before post-processing
-            // NO tonemapping, LUT, antialiasing, post process colour adjustments
-            // NO bloom and other post process stuff like that
-            // It is after camera autoexposure but before final post exposure used in photomode or Lumina.
             var rawBuffer = ctx.cameraColorBuffer;
-
             if (rawBuffer == null) return;
-            OnBufferReady?.Invoke(rawBuffer);
-            _requestCapture = false; // Reset after
+
+            OnBufferReady?.Invoke(ctx, rawBuffer);
+            _requestCapture = false;
         }
-        // Clean-up to prevent memory leaks
+
         protected override void Cleanup()
         {
             OnBufferReady = null;
