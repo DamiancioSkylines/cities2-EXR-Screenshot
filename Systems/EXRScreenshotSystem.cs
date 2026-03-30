@@ -69,11 +69,7 @@ namespace EXRScreenshot.Systems
                 // 16-32 frames is recommended for "Perfect" SSR/Temporal stability.
                 // 2 frames is min recommended so SSR is included in the screenshot
                 int warmupFrames = 2;
-                for (int i = 0; i < warmupFrames; i++)
-                {
-                    yield return new WaitForEndOfFrame();
-                }
-
+                for (int i = 0; i < warmupFrames; i++) yield return new WaitForEndOfFrame();
 
                 // 4. Setup Custom Pass
                 var targetVolume = Object.FindObjectsByType<CustomPassVolume>(FindObjectsSortMode.None)
@@ -98,6 +94,15 @@ namespace EXRScreenshot.Systems
 
                 capturePass.OnBufferReady = (ctx, colorBuffer) =>
                 {
+                    // IMPROVED METADATA: Grab all relevant exposure parameters
+                    var exp = ctx.hdCamera.volumeStack.GetComponent<Exposure>();
+                    string metaString = $"--- Exposure Settings ---\n";
+                    metaString += $"Mode: {exp.mode.value}\n";
+                    metaString += $"Fixed Exposure (EV100): {exp.fixedExposure.value:F2}\n";
+                    metaString += $"Compensation: {exp.compensation.value:F2}\n";
+                    metaString += $"Limit Min: {exp.limitMin.value:F2}\n";
+                    metaString += $"Limit Max: {exp.limitMax.value:F2}\n";
+                    
                     HDUtils.BlitCameraTexture(ctx.cmd, colorBuffer, captureRTHandle);
                     frameCaptured = true;
 
@@ -140,16 +145,14 @@ namespace EXRScreenshot.Systems
                                 if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
                                 
                                 File.WriteAllBytes(cleanPath, encodedBytes);
-                                Mod.LOG.Info($"Saved EXR: {cleanPath} ({targetWidth}x{targetHeight}) using compression {Mod.Setting.CompressionDropdown}");
+                                Mod.LOG.Info($"Saved EXR: {cleanPath}");
+                                
+                                // Save Metadata
+                                var metaPath = Path.ChangeExtension(cleanPath, ".txt");
+                                File.WriteAllText(metaPath, metaString);
                             }
-                            catch (Exception e)
-                            {
-                                Mod.LOG.Error($"IO Error: {e.Message}");
-                            }
-                            finally
-                            {
-                                readbackFinished = true;
-                            }
+                            catch (Exception e) { Mod.LOG.Error($"IO Error: {e.Message}"); }
+                            finally { readbackFinished = true; }
                         });
                     });
                 };

@@ -37,11 +37,21 @@ namespace EXRScreenshot.Systems
             // for the texture by ID. This is faster and more reliable when 
             // using the RTHandle.ResetReferenceSize scaling method.
             var colorBuffer = ctx.cameraColorBuffer;
-            if (colorBuffer == null) return;
+            
+            if (colorBuffer != null && colorBuffer.rt != null)
+            {
+                // LOGGING: Check the actual bit-depth and format of the HDRP buffer
+                if (Mod.Setting.DebugLogging)
+                {
+                    Mod.LOG.Info($"[EXRCapturePass] Capture Triggered on: {ctx.hdCamera.camera.name}");
+                    Mod.LOG.Info($"[EXRCapturePass] Buffer Format: {colorBuffer.rt.graphicsFormat}");
+                    Mod.LOG.Info($"[EXRCapturePass] RenderTarget Format: {colorBuffer.rt.format}");
+                }
 
-            // Send the buffer handle to the EXRScreenshotSystem.
-            // This is "Zero-Copy"—we are passing a reference, not duplicating pixels on GPU.
-            OnBufferReady?.Invoke(ctx, colorBuffer);
+                // Send the buffer handle to the EXRScreenshotSystem.
+                // This is "Zero-Copy"—we are passing a reference, not duplicating pixels on GPU.
+                OnBufferReady?.Invoke(ctx, colorBuffer);
+            }
             
             // Reset the flag immediately to ensure we only capture one frame per request.
             _requestCapture = false;
