@@ -287,7 +287,10 @@ Before testing your LUT in-game, use the **Lumina** mod to lock the following va
 * Contrast = 0
 * Hue Shift = 0
 * Saturation = 0
-* Color Filter = White (FFFFFF) If its ever get added.
+* Colour Filter = White (FFFFFF) If its ever get added.
+* Shadows, Midtones, & Highlights: To your desired static value.
+Note: Even though Lumina uses single-value sliders, the game's internal Season Colour Overrides are not neutral they use RGB values not single value. Manually setting them a consistent baseline regardless of the current in-game season.
+
 
 By locking these to zero, you bypass the game's dynamic color adjustments entirely, ensuring your custom LUT is the *only* thing grading the final image.
 ---
