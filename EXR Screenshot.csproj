@@ -5,6 +5,9 @@
         <TargetFramework>net472</TargetFramework>
         <Configurations>Debug;Release</Configurations>
 
+        <!-- Publish(Brand New Mod ), NewVersion (Patch your mod), Update ( change the Description, Thumbnail, or Screenshots on the pdx page.)-->
+        <ModPublisherCommand>Publish</ModPublisherCommand>
+        
         <!--The file where mod information which is required for publishing mod on PDX mods are stored-->
         <PublishConfigurationPath>Properties\PublishConfiguration.xml</PublishConfigurationPath>
         <LangVersion>default</LangVersion>
