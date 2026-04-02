@@ -40,7 +40,6 @@ namespace EXRScreenshot
 
                 if (EXRScreenshotSystem.Instance != null)
                 {
-                    if (Setting.DebugLogging) VolumeInspection.LogGlobalStack();
                     EXRScreenshotSystem.Instance.CaptureEXR();
                 }
                 else

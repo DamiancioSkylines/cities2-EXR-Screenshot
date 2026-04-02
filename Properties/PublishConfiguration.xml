@@ -1,34 +1,44 @@
 <Publish>
 	<!--Id must be set in order to update existed mod. it is not required for publishing mod for the first time-->
 	<ModId Value="" />
+	<!-- Supported values Public, Private, Unlisted -->
+	<AccessLevel Value="Unlisted" />
 	<!--Name of the mod to display to players-->
 	<DisplayName Value="EXR Screenshot" />
 	<!--Short description of the mod-->
-	<ShortDescription Value="Capture high-dynamic-range linear EXR screenshots for LUT authoring." />
-	<!--Long description of the mod. Single line or multi line. Supports minimal markdown subset-->
+	<ShortDescription Value="Capture high-dynamic-range linear EXR screenshots for professional LUT authoring." />
+	<!--Long description of the mod. Single line or multi line. Supports minimal Markdown subset-->
 	<!--LongDescription Value="This mod lets you take EXR in linear colour space screenshots" /-->
 	<LongDescription>
-A specialized tool for creators to capture **16-bit Floating Point EXR** screenshots in **Linear Colour Space**. Perfect for creating custom LUTs.
+**⚠️ WORK IN PROGRESS TOOL**
+This mod is a technical tool designed for creators who want to author custom LUTs using professional software like DaVinci Resolve.
 
-### Key Features:
-* **Raw GPU Capture:** Images are captured directly from the GPU render buffer before post-processing (No Bloom, LUTs, Tonemapping, Colour Adjustments and stuff like that).
-* **Accurate Resolution:** Capture resolution is determined by the internal render buffer size, providing the purest data possible before upscaling.
-* **Deep Rendering Inspection:** Includes an optional debug toggle to log active HDRP Volume data, Climate overrides, and Exposure settings directly to the game, beta feature.
-* **Linear Workflow:** Exports in a format that preserves the full dynamic range of the scene.
+# 🎞️ EXR Screenshot: The Digital Negative
+Capture your city's light in its purest form. Unlike standard screenshots that bake in compressed colours, this mod captures raw **Linear HDR Scene Radiance** directly from the HDRP buffer.
 
-### Usage:
-* **SHIFT + F1**: Capture an EXR screenshot.
-* Files are saved to: `%AppData%\LocalLow\Colossal Order\Cities Skylines II\Screenshots\EXR\`
-* To increase the resolution of screenshot you need to increase native resolution fe. turn off DLSS or any upscaling.
+### ✨ Key Features
+* **Professional Grade EXR:** Saves in 16-bit per channel (Half-Float) EXR format. This ensures zero data loss when capturing the engine's internal 32-bit packed HDR buffer.
+* **Scene-Linear Workflow:** Captures at the `BeforePostProcess` injection point. This means your file is a "Clean Plate" with no Bloom, No Film Grain, and no Tonemapping baked into the pixels.
+* **Super Resolution:** Scale internal rendering up to 4x of native screen resolution regardless upscaler you have selected to generate massive, high-fidelity source images for grading.
+* **Metadata Inspection:** Generates a companion metadata `.txt` file for every shot, logging the exact exposure values, climate overrides, and active volume settings just for posterity, as screenshot is immune to them.
 
-*Note: Captured images currently include the game's Eye Adaptation (Auto-Exposure).*
+### 🎨 Professional Pipeline
+This mod is built to work in tandem with the **Lumina** mod and **DaVinci Resolve**. By "Zeroing" the engine's colour adjustments in Lumina, you ensure your custom LUT is the only thing grading the image, preventing "double-grading" artefacts.
+
+**Why EXR?** Standard PNGs are 8-bit "Display" images. EXRs are "Data." By grading raw 16-bit float data, you avoid banding and posterization, allowing for cinematic realism that isn't possible with standard tools.
+
+### 📁 File Location
+Screenshots are saved to:
+`%AppData%\LocalLow\Colossal Order\Cities Skylines II\Screenshots\EXR\`
+
+*Refer to the included technical README on GitHub page for this mod for the exact DaVinci Resolve node setup and in depth explanation.*
 	</LongDescription>
 	<!--Thumbnail-->
 	<Thumbnail Value="Properties/Thumbnail.png" />
 	<!--Screenshot, can be set multiple times-->
-	<Screenshot Value="" />
+	<Screenshot Value="Properties/Screenshot01.png" />
 	<!--Tag, can be set multiple times-->
-	<Tag Value="" />
+	<Tag Value="Code Mod" />
 	<!--Link to the forum post where the mod can be discussed-->
 	<ForumLink Value="" />
 	<!--Version of the mod-->
@@ -40,9 +50,11 @@ A specialized tool for creators to capture **16-bit Floating Point EXR** screens
 	<!--Required DLC, can be set multiple times. Supported values are "Landmark Buildings", "San Fransisco Set", "Beach Properties", "Urban Promenades", "Modern Architecture"-->
 	<RequiredDLC Value="" />
 	<!--Change log for new version. Single line or multi line. Supports minimal markdown subset-->
-	<ChangeLog Value="" />
-	<!--<ChangeLog>
-	</ChangeLog>-->
+	<ChangeLog Value="Initial Release" />
+	<ChangeLog>
+- Initial Release
+	</ChangeLog>
 	<!--External link, can be set multiple times. supported types are "discord", "github", "youtube", "twitch", "x", "paypal", "patreon", "buymeacoffee", "kofi", "crowdin", "gitlab", "gofundme"-->
-	<ExternalLink Type="" Url="" />
+	<ExternalLink Type="github" Url="https://github.com/DamiancioSkylines/cities2-EXR-Screenshot" />
+	<ExternalLink Type="paypal" Url="https://www.paypal.com/donate/?hosted_button_id=8VN8P4VJDAKKA" />
 </Publish>

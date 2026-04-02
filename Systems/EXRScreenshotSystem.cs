@@ -36,6 +36,8 @@ namespace EXRScreenshot.Systems
             var mainCam = Camera.main; // This is only for highly unlikely NRE 'System.NullReferenceException' 
             if (!mainCam) yield break;
             
+            var currentMetadata = VolumeInspection.GetActiveMetadata();
+            
             try
             {
                 // 1. Prepare Target Size for Render Target Texture
@@ -56,8 +58,11 @@ namespace EXRScreenshot.Systems
                 // 3. Force Camera to recognize the high-res target
                 var hdData = mainCam.GetComponent<HDAdditionalCameraData>();
                 var originalAllowDynRes = hdData.allowDynamicResolution;
-                hdData.allowDynamicResolution = false; // Disable DLSS/FSR for capture frame
+                hdData.allowDynamicResolution = false; // "Disable" DLSS/FSR for capture frame
                 
+                // superResRT acts as the temporary high-res 'canvas' for the camera.
+                // 24-bit depth is required here to ensure geometry/shadows are calculated correctly at scale.
+                // RenderTextureFormat.DefaultHDR ensures compatibility with the engine's internal rendering.
                 var superResRT = RenderTexture.GetTemporary(targetWidth, targetHeight, 24, RenderTextureFormat.DefaultHDR);
                 var originalTarget = mainCam.targetTexture;
                 mainCam.targetTexture = superResRT;
@@ -67,7 +72,7 @@ namespace EXRScreenshot.Systems
                 
                 // We wait for several frames to let SSR, AO, SSGI to resolve better
                 // 16-32 frames is recommended for "Perfect" SSR/Temporal stability.
-                // 2 frames is min recommended so SSR is included in the screenshot
+                // 2 frames is min recommended so SSR is included in the screenshot, need to test with 1 frame still.
                 int warmupFrames = 2;
                 for (int i = 0; i < warmupFrames; i++) yield return new WaitForEndOfFrame();
 
@@ -94,9 +99,9 @@ namespace EXRScreenshot.Systems
 
                 capturePass.OnBufferReady = (ctx, colorBuffer) =>
                 {
-                    // IMPROVED METADATA: Grab all relevant exposure parameters
+                    // Grab all relevant exposure parameters
                     var exp = ctx.hdCamera.volumeStack.GetComponent<Exposure>();
-                    string metaString = $"--- Exposure Settings ---\n";
+                    var metaString = $"--- Exposure Settings ---\n";
                     metaString += $"Mode: {exp.mode.value}\n";
                     metaString += $"Fixed Exposure (EV100): {exp.fixedExposure.value:F2}\n";
                     metaString += $"Compensation: {exp.compensation.value:F2}\n";
@@ -115,7 +120,7 @@ namespace EXRScreenshot.Systems
                             return;
                         }
 
-                        //Cast custom enum to Unity's expected EXRFlags
+                        // Cast custom enum to Unity's expected EXRFlags
                         var compressionFlag = (Texture2D.EXRFlags)Mod.Setting.CompressionDropdown;
 
                         // EncodeNativeArrayToEXR is a Unity API — must run on main thread.
@@ -142,14 +147,15 @@ namespace EXRScreenshot.Systems
                                 var rawPath = Path.Combine(Application.persistentDataPath, "Screenshots", "EXR", $"Screenshot_{timestamp}.exr");
                                 var cleanPath = Path.GetFullPath(rawPath);
                                 var dir = Path.GetDirectoryName(cleanPath);
+                                var metadataPath = rawPath.Replace(".exr", ".txt");
                                 if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
-                                
+
+                                // Save EXR
                                 File.WriteAllBytes(cleanPath, encodedBytes);
                                 Mod.LOG.Info($"Saved EXR: {cleanPath}");
                                 
                                 // Save Metadata
-                                var metaPath = Path.ChangeExtension(cleanPath, ".txt");
-                                File.WriteAllText(metaPath, metaString);
+                                File.WriteAllText(metadataPath, currentMetadata);
                             }
                             catch (Exception e) { Mod.LOG.Error($"IO Error: {e.Message}"); }
                             finally { readbackFinished = true; }
