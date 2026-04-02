@@ -25,10 +25,13 @@ Capture your city's light in its purest form. Unlike standard screenshots that b
 ### 🎨 Professional Pipeline
 This mod is built to work in tandem with the **Lumina** mod and **DaVinci Resolve**. By "Zeroing" the engine's colour adjustments in Lumina, you ensure your custom LUT is the only thing grading the image, preventing "double-grading" artefacts.
 
-**Why EXR?** Standard PNGs are 8-bit "Display" images. EXRs are "Data." By grading raw 16-bit float data, you avoid banding and posterization, allowing for cinematic realism that isn't possible with standard tools.
+**Why EXR?** Standard PNGs are 8-bit "Display" images. EXRs are "Data." By grading raw 16-bit float data you doing it in accurate way.
+
+### ⌨️ Usage:
+* **SHIFT + F1**: Capture an EXR screenshot. With 4x SuperResolution screenshot takes a while, and performance recovers after some time too.
 
 ### 📁 File Location
-Screenshots are saved to:
+Screenshots and Metadata are saved to:
 `%AppData%\LocalLow\Colossal Order\Cities Skylines II\Screenshots\EXR\`
 
 *Refer to the included technical README on GitHub page for this mod for the exact DaVinci Resolve node setup and in depth explanation.*
