@@ -17,7 +17,7 @@ This mod is a technical tool designed for creators who want to author custom LUT
 Capture your city's light in its purest form. Unlike standard screenshots that bake in compressed colours, this mod captures raw **Linear HDR Scene Radiance** directly from the HDRP buffer.
 
 ### ✨ Key Features
-* **Professional Grade EXR:** Saves in 16-bit per channel (Half-Float) EXR format. This ensures zero data loss when capturing the engine's internal 32-bit packed HDR buffer.
+* **Professional Grade EXR:** Saves in **16-bit per channel** (Half-Float) EXR format. This ensures zero data loss when capturing the engine's internal **32-bit total** packed HDR buffer.
 * **Scene-Linear Workflow:** Captures at the `BeforePostProcess` injection point. This means your file is a "Clean Plate" with no Bloom, No Film Grain, and no Tonemapping baked into the pixels.
 * **Super Resolution:** Scale internal rendering up to 4x of native screen resolution regardless upscaler you have selected to generate massive, high-fidelity source images for grading.
 * **Metadata Inspection:** Generates a companion metadata `.txt` file for every shot, logging the exact exposure values, climate overrides, and active volume settings just for posterity, as screenshot is immune to them.
@@ -32,6 +32,7 @@ This mod is built to work in tandem with the **Lumina** mod and **DaVinci Resolv
 
 ### 📁 File Location
 Screenshots and Metadata are saved to:
+		
 `%AppData%\LocalLow\Colossal Order\Cities Skylines II\Screenshots\EXR\`
 
 *Refer to the included technical README on GitHub page for this mod for the exact DaVinci Resolve node setup and in depth explanation.*
@@ -43,7 +44,7 @@ Screenshots and Metadata are saved to:
 	<!--Tag, can be set multiple times-->
 	<Tag Value="Code Mod" />
 	<!--Link to the forum post where the mod can be discussed-->
-	<ForumLink Value="" />
+	<ForumLink Value="https://forum.paradoxplaza.com/forum/threads/exr-screenshot.1916082/" />
 	<!--Version of the mod-->
 	<ModVersion Value="1.0.0" />
 	<!--Recommended version of the base game to use the mod-->
