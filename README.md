@@ -312,7 +312,7 @@ You need extract the exact transform LUTs directly from the Unity Engine:
 2. Go to **Window > Package Manager**, select **High Definition RP**.
 3. Under Samples, click **Import** next to **Additional Post-processing Data**.
 4. Navigate to: `Assets\Samples\High Definition RP\[Version]\Additional Post-processing Data\Cube LUTs`.
-5. Copy `Linear to Unity Log r1.cube` and `Unity Log to sRGB r1.cube` into your DaVinci Resolve LUT folder.
+5. Copy `Linear to Unity Log r1.cube` and `Unity Log to sRGB r1.cube` and all the rest of LUTs into your DaVinci Resolve LUT folder.
 
 ### Method B: The Exact Engine Math (DCTL / CST) The Unity LogC Transform
 Pro colorists often prefer using math nodes for maximum precision. You can use a Color Space Transform (CST) set to *Linear input* and *ARRI LogC3 output*, or use a DCTL with Unity's exact `Color.hlsl` formula:
