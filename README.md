@@ -331,13 +331,27 @@ Unity uses the **ARRI Alexa LogC (Exposure Index 1000)** spec as its internal LU
 | `e` | `5.301883` | Linear segment slope |
 | `f` | `0.092819` | Linear segment offset |
 
+<div align="center">
+
 **Forward Transform (Linear → LogC):**
 
-$$f(x) = \begin{cases} 0.244161 \cdot \log_{10}(5.555556 \cdot x + 0.047996) + 0.386036 & \text{if } x > 0.011361 \\ 5.301883 \cdot x + 0.092819 & \text{if } x \leq 0.011361 \end{cases}$$
+$$
+f(x) = \begin{cases}
+0.244161 \cdot \log_{10}(5.555556 \cdot x + 0.047996) + 0.386036 & \text{if } x > 0.011361 \\
+5.301883 \cdot x + 0.092819 & \text{if } x \leq 0.011361
+\end{cases}
+$$
 
 **Inverse Transform (LogC → Linear):**
 
-$$f^{-1}(x) = \begin{cases} \dfrac{10^{(x - 0.386036)\,/\,0.244161} - 0.047996}{5.555556} & \text{if } x > e \cdot \text{cut} + f \\ \dfrac{x - 0.092819}{5.301883} & \text{otherwise} \end{cases}$$
+$$
+f^{-1}(x) = \begin{cases}
+\dfrac{10^{(x - 0.386036)\ /\ 0.244161} - 0.047996}{5.555556} & \text{if } x > e \cdot \text{cut} + f \\
+\dfrac{x - 0.092819}{5.301883} & \text{otherwise}
+\end{cases}
+$$
+
+</div>
 
 > The shader's `USE_PRECISE_LOGC` define defaults to `0`, meaning the fast path omits the linear segment for the majority of pixels. For LUT authoring the precise piecewise version is more accurate in deep shadows and should be preferred in your DCTL.
 
