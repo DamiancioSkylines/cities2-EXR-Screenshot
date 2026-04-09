@@ -49,7 +49,7 @@ namespace EXRScreenshot.Settings
                     "\n <None>: Huge file size, no processing." +
                     "\n <ZIP> : Excellent compression, but slow to save." +
                     "\n <RLE> : Fast, run-length encoding." +
-                    "\n <PIZ> : Fastest! But not ass small as ZIP"
+                    "\n <PIZ> : Fastest! But not as small as ZIP"
                 },
                 
                 // Compression Methods 
