@@ -1,10 +1,13 @@
 ﻿using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using Colossal.IO.AssetDatabase;
 using Game.Input;
 using Game.Modding;
 using Game.Settings;
 using Game.UI.Widgets;
+using JetBrains.Annotations;
+using UnityEngine;
 
 namespace EXRScreenshot.Settings
 {
@@ -13,15 +16,14 @@ namespace EXRScreenshot.Settings
     /// This class extends <see cref="ModSetting"/> to integrate with the game's settings menu.
     /// </summary>
     /// <remarks>
-    /// This class defines UI groups, tab order, and keyboard/gamepad actions for various mod functionalities
-    /// such as vehicle control, camera behaviour, and general mod settings.
+    /// This class defines UI groups, tab order, and keyboard/gamepad actions for various mod functionalities and general mod settings.
     /// </remarks>
     // Mod settings class, handling UI and keybindings.
     [FileLocation("ModsSettings/" + nameof(EXRScreenshot))]
     // Define the order of groups within the tabs
-    [SettingsUIGroupOrder(SettingsGroup,ResetGroup)]
+    [SettingsUIGroupOrder(SettingsGroup,LinksGroup)]
     // Show group names
-    [SettingsUIShowGroupName(SettingsGroup,ResetGroup)]
+    [SettingsUIShowGroupName(SettingsGroup,LinksGroup)]
     // Define tab order e.g
     // [SettingsUITabOrder(MainTab, KSecondTab)]
 
@@ -30,7 +32,8 @@ namespace EXRScreenshot.Settings
     {
         public const string MainTab = "MainTab";
         public const string SettingsGroup = "EXRSettingsGroup";
-        public const string ResetGroup = "EXRResetGroup";
+        //public const string ResetGroup = "EXRResetGroup";
+        public const string LinksGroup = "EXRLinksGroup";
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Setting"/> class.
@@ -47,16 +50,21 @@ namespace EXRScreenshot.Settings
             OldMethod = 1,
         }
         
-        
         [SuppressMessage("ReSharper", "InconsistentNaming")]
         public enum CompressionMethodEnum
         {
             None = 0,
-            //OutputAsFloat = 1, // Float is 32 bit per channel, instead of 16-bit that actual game colour buffer is. For mod use case it just doubles the size of file for no gain.
+            //OutputAsFloat = 1, // Float is 32 bit per channel, instead of 32-bit total that actual game colour buffer is. For mod use case it just doubles the size of file for no gain.
             CompressZIP = 2,
             CompressRLE = 4,
             CompressPIZ = 8,
         }
+        
+        /// <summary>
+        /// Gets and shows the currently set mod version from .csproj
+        /// </summary>
+        [SettingsUISection(MainTab, SettingsGroup)]
+        public string ModVersion => Assembly.GetExecutingAssembly().GetName().Version.ToString(3);
 
 
         [SettingsUIKeyboardBinding(BindingKeyboard.F1, Mod.TakeScreenshotActionName, shift: true)]
@@ -87,31 +95,57 @@ namespace EXRScreenshot.Settings
         public bool TakeSuperResolution { get; set; }
         
         [SettingsUISection(MainTab, SettingsGroup)]
-        public bool DebugLogging { get; set; } = false;
+        public bool MetadataLogging { get; set; }
         
-
+        [SettingsUISection(MainTab, SettingsGroup)]
+        public bool DebugLogging { get; set; }
+        
+        // This button is actually not needed as reset exist in shortcut widget
+        [SettingsUIHidden]
         [SettingsUIButton]
         [SettingsUIButtonGroup("Reset")]
-        [SettingsUISection(MainTab, ResetGroup)]
+        [SettingsUISection(MainTab, SettingsGroup)]
         public bool ResetShortcuts
         {
+            // ReSharper disable once ValueParameterNotUsed
             set
             {
                 Mod.LOG.Info("EXR Screenshot: Reset key bindings");
                 ResetKeyBindings();
             }
         }
+        
+        
         [SettingsUIButton]
         [SettingsUIButtonGroup("Reset")]
-        [SettingsUISection(MainTab, ResetGroup)]
+        [SettingsUISection(MainTab, SettingsGroup)]
         public bool ResetSettings
         {
+            // ReSharper disable once ValueParameterNotUsed
             set
             {
                 Mod.LOG.Info("EXR Screenshot: Reset all settings");
                 ResetKeyBindings();
                 SetDefaults();
             }
+        }
+        
+        [SettingsUIButton]
+        [SettingsUIButtonGroup("Links")]
+        [SettingsUISection(MainTab, LinksGroup)]
+        [UsedImplicitly]
+        public bool DonateLink {
+            // ReSharper disable once ValueParameterNotUsed
+            set => Application.OpenURL("https://www.paypal.com/donate/?hosted_button_id=8VN8P4VJDAKKA");
+        }
+        
+        [SettingsUIButton]
+        [SettingsUIButtonGroup("Links")]
+        [SettingsUISection(MainTab, LinksGroup)]
+        [UsedImplicitly]
+        public bool GithubLink {
+            // ReSharper disable once ValueParameterNotUsed
+            set => Application.OpenURL("https://github.com/DamiancioSkylines/cities2-EXR-Screenshot");
         }
         
         /// <summary>
@@ -140,6 +174,8 @@ namespace EXRScreenshot.Settings
             SupersampleScale = 1.0f;
             ModeDropdown = ScreenshotMethodEnum.NewMethod;
             CompressionDropdown = CompressionMethodEnum.CompressPIZ;
+            DebugLogging = false;
+            MetadataLogging = false;
         }
     }
 }

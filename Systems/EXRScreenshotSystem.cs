@@ -35,9 +35,13 @@ namespace EXRScreenshot.Systems
             _isCapturing = true;
             var mainCam = Camera.main; // This is only for highly unlikely NRE 'System.NullReferenceException' 
             if (!mainCam) yield break;
-            
-            var currentMetadata = VolumeInspection.GetActiveMetadata();
-            
+            string currentMetadata = null;
+                
+            if (Mod.Setting.MetadataLogging)
+            {
+                currentMetadata = VolumeInspection.GetActiveMetadata();
+            }
+
             try
             {
                 // 1. Prepare Target Size for Render Target Texture
@@ -99,7 +103,8 @@ namespace EXRScreenshot.Systems
 
                 capturePass.OnBufferReady = (ctx, colorBuffer) =>
                 {
-                    // Grab all relevant exposure parameters
+                    // Grab all relevant exposure parameters might use this later
+                    /*
                     var exp = ctx.hdCamera.volumeStack.GetComponent<Exposure>();
                     var metaString = $"--- Exposure Settings ---\n";
                     metaString += $"Mode: {exp.mode.value}\n";
@@ -107,6 +112,7 @@ namespace EXRScreenshot.Systems
                     metaString += $"Compensation: {exp.compensation.value:F2}\n";
                     metaString += $"Limit Min: {exp.limitMin.value:F2}\n";
                     metaString += $"Limit Max: {exp.limitMax.value:F2}\n";
+                    */
                     
                     HDUtils.BlitCameraTexture(ctx.cmd, colorBuffer, captureRTHandle);
                     frameCaptured = true;
@@ -147,7 +153,7 @@ namespace EXRScreenshot.Systems
                                 var rawPath = Path.Combine(Application.persistentDataPath, "Screenshots", "EXR", $"Screenshot_{timestamp}.exr");
                                 var cleanPath = Path.GetFullPath(rawPath);
                                 var dir = Path.GetDirectoryName(cleanPath);
-                                var metadataPath = rawPath.Replace(".exr", ".txt");
+                                
                                 if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
 
                                 // Save EXR
@@ -155,6 +161,8 @@ namespace EXRScreenshot.Systems
                                 Mod.LOG.Info($"Saved EXR: {cleanPath}");
                                 
                                 // Save Metadata
+                                if (!Mod.Setting.MetadataLogging || currentMetadata == null) return;
+                                var metadataPath = rawPath.Replace(".exr", ".txt");
                                 File.WriteAllText(metadataPath, currentMetadata);
                             }
                             catch (Exception e) { Mod.LOG.Error($"IO Error: {e.Message}"); }
