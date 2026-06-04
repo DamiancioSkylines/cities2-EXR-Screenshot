@@ -61,6 +61,22 @@ namespace EXRScreenshot.Settings
         }
         
         /// <summary>
+        /// Defines the amount of accumulation wait frame for taking screenshots
+        /// </summary>
+        public enum AccumulationFramesEnum
+        {
+            // None = 0, // 0 accumulation frames Breaks the image.
+            OneFrame = 1,
+            TwoFrames = 2,
+            FourFrames = 4,
+            EightFrames = 8,
+            SixteenFrames = 16,
+            ThirtyTwoFrames = 32,
+            SixtyFourFrames = 64,
+            OneHundredTwentyEightFrames = 128,
+        }
+        
+        /// <summary>
         /// Gets and shows the currently set mod version from .csproj
         /// </summary>
         [SettingsUISection(MainTab, SettingsGroup)]
@@ -89,6 +105,12 @@ namespace EXRScreenshot.Settings
         [SettingsUISection(MainTab, SettingsGroup)]
         [SettingsUISlider(min = 1.0f, max = 4.0f, step = 0.5f, unit = "Scale")]
         public float SupersampleScale { get; set; } = 1.0f;
+        
+        /// <summary>
+        /// Gets or sets the currently selected screenshot accumulation wait frames.
+        /// </summary>
+        [SettingsUISection(MainTab, SettingsGroup)]
+        public AccumulationFramesEnum AccumulationFramesDropdown { get; set; } = AccumulationFramesEnum.TwoFrames;
         
         //[SettingsUIHidden]
         [SettingsUISection(MainTab, SettingsGroup)]
@@ -174,6 +196,7 @@ namespace EXRScreenshot.Settings
             SupersampleScale = 1.0f;
             ModeDropdown = ScreenshotMethodEnum.NewMethod;
             CompressionDropdown = CompressionMethodEnum.CompressPIZ;
+            AccumulationFramesDropdown = AccumulationFramesEnum.SixteenFrames;
             DebugLogging = false;
             MetadataLogging = false;
         }

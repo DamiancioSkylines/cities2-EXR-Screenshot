@@ -76,6 +76,26 @@ namespace EXRScreenshot.Settings
                 { setting.GetEnumValueLocaleID(Setting.CompressionMethodEnum.CompressPIZ), "PIZ (Wavelet - Recommended)" },
                 // { setting.GetEnumValueLocaleID(Setting.CompressionMethodEnum.OutputAsFloat), "Float" }, // Not used
                 
+                // Accumulation Dropdown
+                { setting.GetOptionLabelLocaleID(nameof(Setting.AccumulationFramesDropdown)), "Accumulation Frames" },
+                { setting.GetOptionDescLocaleID(nameof(Setting.AccumulationFramesDropdown)), 
+                    "Chose amount of accumulation frames before screenshot is taken. " +
+                    "\n This will result in longer capture but will accumulate more SSAO, SSGI for more resolved image" +
+                    "\n Simply giving you less noise and more accurate contrast." +
+                    "\n 16 - 32 frames is recommended, you can go above but returns are diminishing" +
+                    "\n Previous baseline was 2 frames."
+                },
+                
+                // Accumulation Frames
+                { setting.GetEnumValueLocaleID(Setting.AccumulationFramesEnum.OneFrame), "1 frame" },
+                { setting.GetEnumValueLocaleID(Setting.AccumulationFramesEnum.TwoFrames), "2 frames" },
+                { setting.GetEnumValueLocaleID(Setting.AccumulationFramesEnum.FourFrames), "4 frames" },
+                { setting.GetEnumValueLocaleID(Setting.AccumulationFramesEnum.EightFrames), "8 frames" },
+                { setting.GetEnumValueLocaleID(Setting.AccumulationFramesEnum.SixteenFrames), "16 frames" },
+                { setting.GetEnumValueLocaleID(Setting.AccumulationFramesEnum.ThirtyTwoFrames), "32 frames" },
+                { setting.GetEnumValueLocaleID(Setting.AccumulationFramesEnum.SixtyFourFrames), "64 frames" },
+                { setting.GetEnumValueLocaleID(Setting.AccumulationFramesEnum.OneHundredTwentyEightFrames), "128 frames" },
+                
                 // Debug Logging Toggle
                 { setting.GetOptionLabelLocaleID(nameof(Setting.DebugLogging)), "Debug Logging" },
                 { setting.GetOptionDescLocaleID(nameof(Setting.DebugLogging)), "Output technical details to the mod log file." },

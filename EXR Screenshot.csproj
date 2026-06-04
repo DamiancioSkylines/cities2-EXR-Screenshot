@@ -14,7 +14,7 @@
         <RootNamespace>EXRScreenshot</RootNamespace>
 
         <!--So the Mod Version works in game settings and possibly skyve -->
-        <Version>1.0.2</Version>
+        <Version>1.0.3</Version>
         <FileVersion>$(Version)</FileVersion>
         <AssemblyVersion>$(Version)</AssemblyVersion>
     </PropertyGroup>

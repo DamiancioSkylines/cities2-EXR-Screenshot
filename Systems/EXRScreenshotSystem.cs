@@ -75,9 +75,15 @@ namespace EXRScreenshot.Systems
                 RTHandles.SetReferenceSize(targetWidth, targetHeight);
                 
                 // We wait for several frames to let SSR, AO, SSGI to resolve better
-                // 16-32 frames is recommended for "Perfect" SSR/Temporal stability.
-                // 2 frames is min recommended so SSR is included in the screenshot, need to test with 1 frame still.
-                int warmupFrames = 2;
+                // O frames can break screenshots when glass is in the view not sure why so minimum should be at least 1 frame
+                // 1 frame is very noisy in SSGI and SSAO
+                // 16-32 frames is recommended for "Perfect" SSR/Temporal stability, but going all the way to 128 is possible but with some diminishing erturns
+                // Dynamically read user setting to allow temporal effects (SSR, SSGI, AO) to resolve
+                int warmupFrames = (int)Mod.Setting.AccumulationFramesDropdown;
+                if (Mod.Setting.DebugLogging && warmupFrames > 0)
+                {
+                    Mod.LOG.Info($"[EXRScreenshotSystem] Warming up for {warmupFrames} accumulation frames...");
+                }
                 for (int i = 0; i < warmupFrames; i++) yield return new WaitForEndOfFrame();
 
                 // 4. Setup Custom Pass
