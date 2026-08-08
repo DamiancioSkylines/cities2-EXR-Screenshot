@@ -5,10 +5,7 @@ using System.Reflection;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Rendering;
-using UnityEngine.Rendering.HighDefinition;
 using Object = UnityEngine.Object;
-using Game.Prefabs.Climate;
-using Game.Simulation;
 using Game.Rendering;
 using Unity.Entities;
 
@@ -16,140 +13,248 @@ namespace EXRScreenshot.Systems
 {
     public static class VolumeInspection
     {
-        public static string GetActiveMetadata()
+        // Caches for reflection to improve performance during log generation
+        private static readonly Dictionary<Type, FieldInfo[]> SFieldCache = new();
+        private static readonly Dictionary<Type, PropertyInfo> SPropertyCache = new();
+
+        /// <summary>
+        /// Retrieves and caches all fields (public and non-public instance) for a given type.
+        /// </summary>
+        private static FieldInfo[] GetCachedFields(Type type)
         {
-            var sb = new StringBuilder();
-            try 
+            if (!SFieldCache.TryGetValue(type, out var fields))
             {
-                sb.AppendLine("========= DEEP RENDERING INSPECTION =========");
-
-                // 1. LOG LIVE CLIMATE BLENDING (Matches Developer UI Climate Tab)
-                LogLiveClimateProperties(sb);
-
-                // 2. LOG SIMULATION STATE
-                LogClimateState(sb);
-
-                // 3. CHECK EFFECTIVE OUTPUT (Final Stack)
-                LogEffectiveStack(sb);
-
-                // 4. SCENE VOLUMES
-                var volumes = Object.FindObjectsByType<Volume>(FindObjectsSortMode.None);
-                sb.AppendLine($"\n[Analyst] Scanning {volumes.Length} scene volumes...\n");
-
-                foreach (var vol in volumes.OrderByDescending(v => v.priority))
-                {
-                    if (vol.profile == null) continue;
-                    sb.AppendLine($"[Volume: {vol.gameObject.name}] Priority: {vol.priority} | Weight: {vol.weight}");
-                    foreach (var component in vol.profile.components)
-                    {
-                        LogComponentOverrides(sb, component);
-                    }
-                    sb.AppendLine();
-                }
+                fields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                SFieldCache[type] = fields;
             }
-            catch (Exception e)
-            {
-                sb.AppendLine($"LOGGING ERROR: {e.Message}");
-            }
-
-            return sb.ToString();
+            return fields;
         }
 
-        private static void LogLiveClimateProperties(StringBuilder sb)
+        /// <summary>
+        /// Retrieves and caches the "value" property info for volume parameters.
+        /// </summary>
+        private static PropertyInfo GetCachedValueProperty(Type type)
+        {
+            if (!SPropertyCache.TryGetValue(type, out var propertyInfo))
+            {
+                propertyInfo = type.GetProperty("value");
+                SPropertyCache[type] = propertyInfo;
+            }
+            return propertyInfo;
+        }
+
+        /// <summary>
+        /// Main entry point to generate the complete active render metadata text log.
+        /// </summary>
+        public static string GetActiveMetadata()
         {
             var world = World.DefaultGameObjectInjectionWorld;
-            var renderSystem = world?.GetExistingSystemManaged<ClimateRenderSystem>();
-            if (renderSystem == null)
+            var climateRenderSystem = world?.GetExistingSystemManaged<ClimateRenderSystem>();
+
+            var stringBuilder = new StringBuilder();
+            try 
             {
-                sb.AppendLine("[LIVE CLIMATE] ClimateRenderSystem not found.");
+                var allVolumes = GetAllCandidateVolumes(climateRenderSystem, world).ToList();
+
+                LogEffectiveRenderVolumeStackParameters(stringBuilder, allVolumes);
+                LogAllVolumesWithParameters(stringBuilder, climateRenderSystem, allVolumes);
+            }
+            catch (Exception exception)
+            {
+                stringBuilder.AppendLine($"LOGGING ERROR: {exception}");
+            }
+
+            return stringBuilder.ToString();
+        }
+
+        /// <summary>
+        /// Safely fetches the VolumeProfile, checking for runtime-instantiated profiles used by mods like Lumina first.
+        /// </summary>
+        private static VolumeProfile GetSafeProfile(Volume volume)
+        {
+            if (volume is null) return null;
+            // Mods (like Lumina) or runtime scripts can create instantiated volume profiles 
+            // instead of using shared assets, so we check for those first.
+            return volume.HasInstantiatedProfile() ? volume.profile : volume.sharedProfile;
+        }
+
+        /// <summary>
+        /// Computes and logs the final blended effective output of all active overlapping volumes.
+        /// </summary>
+        private static void LogEffectiveRenderVolumeStackParameters(StringBuilder stringBuilder, List<Volume> precomputedVolumes)
+        {
+            stringBuilder.AppendLine("[EFFECTIVE RENDER VOLUME STACK PARAMETERS]");
+            stringBuilder.AppendLine("   (Note: Post-processing parameters below are logged for reference, but are NOT baked into EXR pixels, more info on github page)");
+            // Sort active volumes by priority (ascending) so lower-priority volumes form 
+            // the baseline, and higher-priority volumes can correctly blend over them sequentially using BlendValues helper class
+            var activeVolumes = precomputedVolumes
+                .Where(volume => volume&& volume.enabled && volume.gameObject.activeInHierarchy && volume.weight > 0 && GetSafeProfile(volume))
+                .OrderBy(volume => volume.priority)
+                .ToList();
+
+            if (activeVolumes.Count == 0)
+            {
+                stringBuilder.AppendLine("   No active volumes found.");
+                stringBuilder.AppendLine();
                 return;
             }
 
-            sb.AppendLine("[LIVE CLIMATE RENDER VALUES (BLENDED)]");
-            sb.AppendLine($"   From prefabs: {renderSystem.fromWeatherPrefabs.Count}  |  To prefabs: {renderSystem.toWeatherPrefabs.Count}");
+            var effectiveMap = new Dictionary<string, Dictionary<string, object>>();
 
-            LogWeatherPrefabList(sb, "FROM", renderSystem.fromWeatherPrefabs);
-            LogWeatherPrefabList(sb, "TO",   renderSystem.toWeatherPrefabs);
-            sb.AppendLine();
-        }
-
-        private static void LogWeatherPrefabList(StringBuilder sb, string label, IReadOnlyList<WeatherPrefab> prefabs)
-        {
-            for (int i = 0; i < prefabs.Count; i++)
+            foreach (var volume in activeVolumes)
             {
-                var prefab = prefabs[i];
-                sb.AppendLine($"   [{label}][{i}] WeatherPrefab: {prefab.name}");
-
-                foreach (var prop in prefab.overrideableProperties)
+                var safeProfile = GetSafeProfile(volume);
+                foreach (var component in safeProfile.components)
                 {
-                    if (!prop.active) continue;
+                    if (component is null || !component.active) continue;
 
-                    sb.AppendLine($"      Component: {prop.GetType().Name}");
-
-                    var fields = prop.GetType().GetFields(
-                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-
-                    foreach (var field in fields)
+                    var componentName = component.GetType().Name;
+                    if (!effectiveMap.TryGetValue(componentName, out var parameterDictionary))
                     {
+                        parameterDictionary = new Dictionary<string, object>();
+                        effectiveMap[componentName] = parameterDictionary;
+                    }
+
+                    foreach (var field in GetCachedFields(component.GetType()))
+                    {
+                        // Skip fields that aren't volume parameters
                         if (!typeof(VolumeParameter).IsAssignableFrom(field.FieldType)) continue;
-                        var param = field.GetValue(prop) as VolumeParameter;
-                        if (param == null || !param.overrideState) continue;
+                        
+                        // Skip parameters that do not have overrideState enabled
+                        if (field.GetValue(component) is not VolumeParameter{ overrideState: true } parameter) continue;
+                        
+                        var valueProperty = GetCachedValueProperty(field.FieldType);
+                        var value = valueProperty?.GetValue(parameter);
+                                
+                        // Clean up field names by stripping the "m_" prefix using range syntax [2..]
+                        var cleanName = field.Name.StartsWith("m_") ? field.Name[2..] : field.Name;
 
-                        var valueProp = field.FieldType.GetProperty("value");
-                        var val = valueProp?.GetValue(param);
-                        var name = field.Name.StartsWith("m_") ? field.Name.Substring(2) : field.Name;
-                        sb.AppendLine($"         {name} = {val}");
+                        if (parameterDictionary.TryGetValue(cleanName, out var existingValue))
+                        {
+                            parameterDictionary[cleanName] = BlendValues(existingValue, value, volume.weight);
+                        }
+                        else
+                        {
+                            parameterDictionary[cleanName] = value;
+                        }
                     }
                 }
             }
-        }
 
-        private static void LogClimateState(StringBuilder sb)
-        {
-            var climateSystem = World.DefaultGameObjectInjectionWorld?.GetExistingSystemManaged<ClimateSystem>();
-            if (climateSystem != null)
+            foreach (var componentKvp in effectiveMap.OrderBy(entry => entry.Key))
             {
-                sb.AppendLine("[CLIMATE & SIMULATION]");
-                sb.AppendLine($"   -> Temperature: {climateSystem.temperature.value:F2} °C");
-                sb.AppendLine($"   -> Precipitation: {climateSystem.precipitation.value:F2}");
-                sb.AppendLine($"   -> Cloudiness: {climateSystem.cloudiness.value:F2}");
-                sb.AppendLine();
-            }
-        }
+                if (componentKvp.Value.Count == 0) continue;
 
-        private static void LogEffectiveStack(StringBuilder sb)
-        {
-            sb.AppendLine("[GLOBAL STACK EFFECTIVE STATE]");
-            VolumeStack stack = VolumeManager.instance.stack;
-            if (stack == null) return;
-
-            // Always log
-            var ca = stack.GetComponent<ColorAdjustments>();
-            if (ca != null)
-            {
-                sb.AppendLine($"   -> Color Adjustments:");
-                sb.AppendLine($"      - Post Exposure: {ca.postExposure.value} EV");
-                sb.AppendLine($"      - Contrast: {ca.contrast.value}");
-            }
-            sb.AppendLine();
-        }
-
-        private static void LogComponentOverrides(StringBuilder sb, VolumeComponent comp)
-        {
-            var fields = comp.GetType().GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            foreach (var field in fields)
-            {
-                if (typeof(VolumeParameter).IsAssignableFrom(field.FieldType))
+                stringBuilder.AppendLine($"   Component: {componentKvp.Key}");
+                foreach (var parameterKvp in componentKvp.Value.OrderBy(entry => entry.Key))
                 {
-                    var param = field.GetValue(comp) as VolumeParameter;
-                    if (param != null && param.overrideState)
-                    {
-                        var valueProp = field.FieldType.GetProperty("value");
-                        var val = valueProp?.GetValue(param);
-                        sb.AppendLine($"      -> {field.Name.Replace("m_", "")} = {val}");
-                    }
+                    stringBuilder.AppendLine($"      {parameterKvp.Key} = {parameterKvp.Value}");
                 }
             }
+
+            stringBuilder.AppendLine();
+        }
+
+        private static void LogAllVolumesWithParameters(StringBuilder stringBuilder, ClimateRenderSystem climateRenderSystem, List<Volume> precomputedVolumes)
+        {
+            stringBuilder.AppendLine("[SCENE VOLUMES LIST]");
+
+            foreach (var volume in precomputedVolumes.OrderByDescending(volumeItem => volumeItem.priority))
+            {
+                var safeProfile = GetSafeProfile(volume);
+                if (safeProfile is null) continue;
+                
+                // Skip the built-in procedural weather volume managed by ClimateRenderSystem
+                if (climateRenderSystem?.climateControlVolume is not null && volume == climateRenderSystem.climateControlVolume) continue;
+
+                stringBuilder.AppendLine($"   [Volume: {volume.gameObject.name}] Priority: {volume.priority} | Weight: {volume.weight} | Enabled: {volume.enabled}");
+
+                foreach (var component in safeProfile.components.Where(component => component is not null && component.active))
+                {
+                    stringBuilder.AppendLine($"      Component: {component.GetType().Name}");
+                    LogComponentOverrides(stringBuilder, component, "         ");
+                }
+                stringBuilder.AppendLine();
+            }
+        }
+        
+        /// <summary>
+        /// Gathers all candidate volumes from the scene, climate system, and Photo Mode ECS systems.
+        /// </summary>
+        private static IEnumerable<Volume> GetAllCandidateVolumes(ClimateRenderSystem climateRenderSystem, World world)
+        {
+            var volumeSet = new HashSet<Volume>();
+
+            // Include the procedural climate control volume created by ClimateRenderSystem
+            if (climateRenderSystem?.climateControlVolume is { } controlVolume)
+            {
+                volumeSet.Add(controlVolume);
+            }
+
+            // Include all standard volumes found in the scene graph (active or inactive)
+            foreach (var volume in Object.FindObjectsByType<Volume>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (volume) volumeSet.Add(volume);
+            }
+
+            // Early exit if world or systems are missing (handles the ECS check once)
+            if (world?.Systems == null) return volumeSet;
+
+            // Scan internal Photo Mode ECS systems for active internal volume references
+            foreach (var system in world.Systems)
+            {
+                if (system == null || !system.GetType().Name.Contains("Photo")) continue;
+
+                foreach (var field in GetCachedFields(system.GetType()))
+                {
+                    if (!typeof(Volume).IsAssignableFrom(field.FieldType)) continue;
+                    if (field.GetValue(system) is not Volume photoVolume || !photoVolume) continue;
+
+                    volumeSet.Add(photoVolume);
+                }
+            }
+
+            return volumeSet;
+        }
+        
+        /// <summary>
+        /// Inspects a volume component via reflection and logs its overridden parameters.
+        /// </summary>
+        private static void LogComponentOverrides(StringBuilder stringBuilder, VolumeComponent component, string indent = "      ")
+        {
+            foreach (var field in GetCachedFields(component.GetType()))
+            {
+                // IsAssignableFrom checks if the field's type is a VolumeParameter 
+                // or any subclass (e.g., FloatParameter, ColorParameter, Vector3Parameter)
+                if (!typeof(VolumeParameter).IsAssignableFrom(field.FieldType)) continue;
+
+                if (field.GetValue(component) is not VolumeParameter { overrideState: true } parameter) continue;
+
+                var valueProperty = GetCachedValueProperty(field.FieldType);
+                var value = valueProperty?.GetValue(parameter);
+        
+                // Clean up field names by stripping the "m_" prefix using range syntax [2..]
+                var cleanName = field.Name.StartsWith("m_") ? field.Name[2..] : field.Name;
+                stringBuilder.AppendLine($"{indent}{cleanName} = {value}");
+            }
+        }
+
+        /// <summary>
+        /// Blends parameter values mathematically based on volume weights.
+        /// </summary>
+        private static object BlendValues(object oldValue, object newValue, float weight)
+        {
+            if (weight >= 1f || oldValue == null) return newValue;
+
+            return oldValue switch
+            {
+                float floatOld when newValue is float floatNew => Mathf.Lerp(floatOld, floatNew, weight),
+                Color colorOld when newValue is Color colorNew => Color.Lerp(colorOld, colorNew, weight),
+                Vector4 vector4Old when newValue is Vector4 vector4New => Vector4.Lerp(vector4Old, vector4New, weight),
+                Vector3 vector3Old when newValue is Vector3 vector3New => Vector3.Lerp(vector3Old, vector3New, weight),
+                Vector2 vector2Old when newValue is Vector2 vector2New => Vector2.Lerp(vector2Old, vector2New, weight),
+                _ => newValue
+            };
         }
     }
 }

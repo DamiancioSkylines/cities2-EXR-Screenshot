@@ -14,7 +14,7 @@
         <RootNamespace>EXRScreenshot</RootNamespace>
 
         <!--So the Mod Version works in game settings and possibly skyve -->
-        <Version>1.0.3</Version>
+        <Version>1.0.4</Version>
         <FileVersion>$(Version)</FileVersion>
         <AssemblyVersion>$(Version)</AssemblyVersion>
     </PropertyGroup>
@@ -24,15 +24,6 @@
     <Import Project="$([System.Environment]::GetEnvironmentVariable('CSII_TOOLPATH', 'EnvironmentVariableTarget.User'))\Mod.targets"/>
 
     <ItemGroup>
-        <Reference Include="Colossal.IO">
-            <Private>False</Private>
-        </Reference>
-        <Reference Include="Colossal.Mathematics">
-            <Private>False</Private>
-        </Reference>
-        <Reference Include="Colossal.PSI.Common">
-            <Private>False</Private>
-        </Reference>
         <Reference Include="Game">
             <Private>false</Private>
         </Reference>
@@ -43,9 +34,6 @@
             <Private>false</Private>
         </Reference>
         <Reference Include="Colossal.IO.AssetDatabase">
-            <Private>false</Private>
-        </Reference>
-        <Reference Include="Colossal.UI">
             <Private>false</Private>
         </Reference>
         <Reference Include="Colossal.UI.Binding">

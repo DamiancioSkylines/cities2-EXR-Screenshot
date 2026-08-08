@@ -43,13 +43,13 @@ namespace EXRScreenshot.Systems
                 // LOGGING: Check the actual bit-depth and format of the HDRP buffer
                 if (Mod.Setting.DebugLogging)
                 {
-                    Mod.LOG.Info($"[EXRCapturePass] Capture Triggered on: {ctx.hdCamera.camera.name}");
-                    Mod.LOG.Info($"[EXRCapturePass] Buffer Format: {colorBuffer.rt.graphicsFormat}");
-                    Mod.LOG.Info($"[EXRCapturePass] RenderTarget Format: {colorBuffer.rt.format}");
+                    // Expected:
+                    // "[EXRCapturePass] Capture Triggered on: Main Camera, Buffer Format: B10G11R11_UFloatPack32, RenderTarget Format: RGB111110Float"
+                    Mod.LOG.Info($"[EXRCapturePass] Capture Triggered on: {ctx.hdCamera.camera.name} , Buffer Format: {colorBuffer.rt.graphicsFormat} , RenderTarget Format: {colorBuffer.rt.format}");
                 }
 
                 // Send the buffer handle to the EXRScreenshotSystem.
-                // This is "Zero-Copy"—we are passing a reference, not duplicating pixels on GPU.
+                // This is "Zero-Copy" we are passing a reference, not duplicating pixels on GPU.
                 OnBufferReady?.Invoke(ctx, colorBuffer);
             }
             

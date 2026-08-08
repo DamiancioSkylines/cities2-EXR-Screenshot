@@ -24,12 +24,12 @@ Capture your city's light in its purest form. Unlike standard screenshots that b
 * **Metadata Inspection:** Generates a companion metadata `.txt` file for every shot, logging the exact exposure values, climate overrides, and active volume settings just for posterity.
 
 ### Professional Pipeline
-This mod is built to work in tandem with the **Lumina** mod and **DaVinci Resolve**. By "Zeroing" the engine's colour adjustments in Lumina, you ensure your custom LUT is the only thing grading the image, preventing "double-grading" artefacts.
+This mod is built to work in safely with the **Lumina**. By "Zeroing" the engine's colour adjustments in Lumina, you ensure your custom LUT made in **DaVinci Resolve** will be the only thing grading the image, preventing "double-grading" artefacts.
 
 **Why EXR?** Standard PNGs are 8-bit "Display" images. EXRs are "Data." By grading raw 16-bit float data you doing it in accurate way.
 
 ### Usage:
-**SHIFT + F1**: Capture an EXR screenshot. With 4x SuperResolution screenshot takes a while, and performance recovers after some time too.
+**SHIFT + F1**: Capture an EXR screenshot. With 4x SuperResolution screenshot takes a while, and performance recovers after couple seconds.
 
 ### 📁 File Location
 Screenshots and Metadata are saved to:
@@ -47,18 +47,19 @@ Screenshots and Metadata are saved to:
 	<!--Link to the forum post where the mod can be discussed-->
 	<ForumLink Value="https://forum.paradoxplaza.com/forum/threads/exr-screenshot.1916082/" />
 	<!--Version of the mod-->
-	<ModVersion Value="1.0.3" />
+	<ModVersion Value="1.0.4" />
 	<!--Recommended version of the base game to use the mod-->
-	<GameVersion Value="1.5.*" />
+	<GameVersion Value="1.6.*" />
 	<!--Dependency for the mod, can be set multiple times-->
 	<Dependency Id="" />
 	<!--Required DLC, can be set multiple times. Supported values are "Landmark Buildings", "San Fransisco Set", "Beach Properties", "Urban Promenades", "Modern Architecture"-->
 	<RequiredDLC Value="" />
 	<!--Change log for new version. Single line or multi line. Supports minimal markdown subset-->
-	<ChangeLog Value="Settings Update" />
+	<ChangeLog Value="Logging and Metadata Update" />
 	<ChangeLog>
-- Added Accumulation Frames option (Dropdown from Instant up to 128 frames) to allow temporal rendering features like SSGI, and SSAO to cleanly settle for noiseless images.
-- Increased default capture accumulation from 2 frames to 16 frames for cleaner out-of-the-box results.
+- Gated informational logs across systems behind the `DebugLogging` setting to reduce file/console spam.
+- Expanded metadata export to capture combined effective volume properties and scan active Photo Mode ECS volume references.
+- Removed unused assembly references
 	</ChangeLog>
 	<!--External link, can be set multiple times. supported types are "discord", "github", "youtube", "twitch", "x", "paypal", "patreon", "buymeacoffee", "kofi", "crowdin", "gitlab", "gofundme"-->
 	<ExternalLink Type="github" Url="https://github.com/DamiancioSkylines/cities2-EXR-Screenshot" />

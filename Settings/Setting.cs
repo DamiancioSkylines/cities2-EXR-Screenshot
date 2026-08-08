@@ -132,7 +132,7 @@ namespace EXRScreenshot.Settings
             // ReSharper disable once ValueParameterNotUsed
             set
             {
-                Mod.LOG.Info("EXR Screenshot: Reset key bindings");
+                if (Mod.Setting.DebugLogging) { Mod.LOG.Info("[Settings] Reset key bindings");}
                 ResetKeyBindings();
             }
         }
@@ -146,7 +146,7 @@ namespace EXRScreenshot.Settings
             // ReSharper disable once ValueParameterNotUsed
             set
             {
-                Mod.LOG.Info("EXR Screenshot: Reset all settings");
+                if (Mod.Setting.DebugLogging) { Mod.LOG.Info("[Settings] Reset all settings");}
                 ResetKeyBindings();
                 SetDefaults();
             }

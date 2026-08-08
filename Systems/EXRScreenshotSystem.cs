@@ -19,14 +19,18 @@ namespace EXRScreenshot.Systems
         public EXRScreenshotSystem()
         {
             _isCapturing = false;
-            if (Instance != null) Mod.LOG.Warn("Duplicate EXRScreenshotSystem detected.");
+            if (Instance != null) Mod.LOG.Warn("[EXRScreenshotSystem] Duplicate EXRScreenshotSystem detected.");
             Instance = this;
-            if (Mod.Setting.DebugLogging) Mod.LOG.Info("EXRScreenshotSystem initialized.");
+            if (Mod.Setting.DebugLogging) Mod.LOG.Info("[EXRScreenshotSystem] EXRScreenshotSystem initialized.");
         }
         
         public void CaptureEXR()
         {
-            if (_isCapturing) { Mod.LOG.Info("Capture already in progress, ignoring."); return; }
+            if (_isCapturing)
+            {
+                if (Mod.Setting.DebugLogging) { Mod.LOG.Info("[EXRScreenshotSystem] Capture already in progress, ignoring.");}
+                return;
+            }
             GameManager.instance.StartCoroutine(CaptureRoutine());
         }
 
@@ -50,8 +54,8 @@ namespace EXRScreenshot.Systems
                 var scale = Mod.Setting.TakeSuperResolution ? Mod.Setting.SupersampleScale : 1.0f;
                 var targetWidth = Mathf.RoundToInt(mainCam.pixelWidth * scale);
                 var targetHeight = Mathf.RoundToInt(mainCam.pixelHeight * scale);
-                
-                Mod.LOG.Info($"EXR capture coroutine started: {targetWidth}x{targetHeight} (Scale: {scale}x)");
+
+                if (Mod.Setting.DebugLogging) { Mod.LOG.Info($"[EXRScreenshotSystem] EXR capture coroutine started: {targetWidth}x{targetHeight} (Scale: {scale}x)"); }
 
                 // 2. Setup Capture Render Target texture and Render Target Handle
                 var captureRT = new RenderTexture(targetWidth, targetHeight, 0, GraphicsFormat.R16G16B16A16_SFloat);
@@ -77,14 +81,14 @@ namespace EXRScreenshot.Systems
                 // We wait for several frames to let SSR, AO, SSGI to resolve better
                 // O frames can break screenshots when glass is in the view not sure why so minimum should be at least 1 frame
                 // 1 frame is very noisy in SSGI and SSAO
-                // 16-32 frames is recommended for "Perfect" SSR/Temporal stability, but going all the way to 128 is possible but with some diminishing erturns
+                // 16-32 frames is recommended for "Perfect" SSR/Temporal stability, but going all the way to 128 is possible but with some diminishing returns
                 // Dynamically read user setting to allow temporal effects (SSR, SSGI, AO) to resolve
-                int warmupFrames = (int)Mod.Setting.AccumulationFramesDropdown;
+                var warmupFrames = (int)Mod.Setting.AccumulationFramesDropdown;
                 if (Mod.Setting.DebugLogging && warmupFrames > 0)
                 {
                     Mod.LOG.Info($"[EXRScreenshotSystem] Warming up for {warmupFrames} accumulation frames...");
                 }
-                for (int i = 0; i < warmupFrames; i++) yield return new WaitForEndOfFrame();
+                for (var i = 0; i < warmupFrames; i++) yield return new WaitForEndOfFrame();
 
                 // 4. Setup Custom Pass
                 var targetVolume = Object.FindObjectsByType<CustomPassVolume>(FindObjectsSortMode.None)
@@ -109,17 +113,6 @@ namespace EXRScreenshot.Systems
 
                 capturePass.OnBufferReady = (ctx, colorBuffer) =>
                 {
-                    // Grab all relevant exposure parameters might use this later
-                    /*
-                    var exp = ctx.hdCamera.volumeStack.GetComponent<Exposure>();
-                    var metaString = $"--- Exposure Settings ---\n";
-                    metaString += $"Mode: {exp.mode.value}\n";
-                    metaString += $"Fixed Exposure (EV100): {exp.fixedExposure.value:F2}\n";
-                    metaString += $"Compensation: {exp.compensation.value:F2}\n";
-                    metaString += $"Limit Min: {exp.limitMin.value:F2}\n";
-                    metaString += $"Limit Max: {exp.limitMax.value:F2}\n";
-                    */
-                    
                     HDUtils.BlitCameraTexture(ctx.cmd, colorBuffer, captureRTHandle);
                     frameCaptured = true;
 
@@ -127,7 +120,7 @@ namespace EXRScreenshot.Systems
                     {
                         if (request.hasError)
                         {
-                            Mod.LOG.Error("GPU Readback error.");
+                            Mod.LOG.Error("[EXRScreenshotSystem] GPU Readback error.");
                             readbackFinished = true;
                             return;
                         }
@@ -164,14 +157,14 @@ namespace EXRScreenshot.Systems
 
                                 // Save EXR
                                 File.WriteAllBytes(cleanPath, encodedBytes);
-                                Mod.LOG.Info($"Saved EXR: {cleanPath}");
+                                if (Mod.Setting.DebugLogging) { Mod.LOG.Info($"[EXRScreenshotSystem] Saved EXR: {cleanPath}");}
                                 
                                 // Save Metadata
                                 if (!Mod.Setting.MetadataLogging || currentMetadata == null) return;
                                 var metadataPath = rawPath.Replace(".exr", ".txt");
                                 File.WriteAllText(metadataPath, currentMetadata);
                             }
-                            catch (Exception e) { Mod.LOG.Error($"IO Error: {e.Message}"); }
+                            catch (Exception e) { Mod.LOG.Error($"[EXRScreenshotSystem] IO Error: {e.Message}"); }
                             finally { readbackFinished = true; }
                         });
                     });
@@ -197,13 +190,13 @@ namespace EXRScreenshot.Systems
                 // Wait for readback/disk — game should already be running normally
                 yield return new WaitUntil(() => readbackFinished);
 
-                // Clean-up captureRT stays alive until readback is done, aka consumed band no longer needed by the camera. THEN release
+                // Clean-up captureRT stays alive until readback is done, aka consumed and no longer needed by the camera. THEN release
                 if (targetVolume) targetVolume.customPasses.Remove(capturePass);
                 captureRTHandle.Release();
                 captureRT.Release();
                 Object.Destroy(captureRT);
 
-                Mod.LOG.Info("EXR capture coroutine complete.");
+                if (Mod.Setting.DebugLogging) { Mod.LOG.Info("[EXRScreenshotSystem] EXR capture coroutine complete."); }
             }
             finally { _isCapturing = false; }
         }
