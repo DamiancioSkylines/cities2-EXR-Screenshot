@@ -10,7 +10,7 @@
 	<!--Long description of the mod. Single line or multi line. Supports minimal Markdown subset-->
 	<!--LongDescription Value="This mod lets you take EXR in linear colour space screenshots" /-->
 	<LongDescription>
-**⚠️ WORK IN PROGRESS TOOL**
+** WORK IN PROGRESS TOOL **
 This mod is a technical tool designed for creators who want to author custom LUTs using professional software like DaVinci Resolve.
 
 # EXR Screenshot: The Digital Negative
@@ -31,6 +31,9 @@ This mod is built to work in safely with the **Lumina**. By "Zeroing" the engine
 ### Usage:
 **SHIFT + F1**: Capture an EXR screenshot. With 4x SuperResolution screenshot takes a while, and performance recovers after couple seconds.
 
+### Compatibility:
+Works with or without Lumina or Time &amp; Weather Anarchy.
+
 ### 📁 File Location
 Screenshots and Metadata are saved to:
 
@@ -47,7 +50,7 @@ Screenshots and Metadata are saved to:
 	<!--Link to the forum post where the mod can be discussed-->
 	<ForumLink Value="https://forum.paradoxplaza.com/forum/threads/exr-screenshot.1916082/" />
 	<!--Version of the mod-->
-	<ModVersion Value="1.0.4" />
+	<ModVersion Value="1.0.5" />
 	<!--Recommended version of the base game to use the mod-->
 	<GameVersion Value="1.6.*" />
 	<!--Dependency for the mod, can be set multiple times-->
@@ -57,9 +60,11 @@ Screenshots and Metadata are saved to:
 	<!--Change log for new version. Single line or multi line. Supports minimal markdown subset-->
 	<ChangeLog Value="Logging and Metadata Update" />
 	<ChangeLog>
-- Gated informational logs across systems behind the `DebugLogging` setting to reduce file/console spam.
-- Expanded metadata export to capture combined effective volume properties and scan active Photo Mode ECS volume references.
-- Removed unused assembly references
+- Expanded Metadata Export: Captures combined effective volume properties and scan active Photo Mode ECS volume references.
+- Improved Metadata Exports: The .txt metadata files saved alongside your screenshots now include significantly more information in more organized fashion, about the game's simulation state. It effectively documents the intended final post-processing state of the normal game view before the EXR capture intercepts the raw linear buffer.
+- New Metadata Fields: The metadata file will now include: effective render volume stack parameters, scene volumes list, time, map coordinates, season/weather, weather prefabs &amp; season overrides, and day/night cycle parameters.- Removed unused assembly references 
+- Optimization: Removed unused assembly references.
+- Log Management: Gated informational logs across systems behind the `DebugLogging` setting.	
 	</ChangeLog>
 	<!--External link, can be set multiple times. supported types are "discord", "github", "youtube", "twitch", "x", "paypal", "patreon", "buymeacoffee", "kofi", "crowdin", "gitlab", "gofundme"-->
 	<ExternalLink Type="github" Url="https://github.com/DamiancioSkylines/cities2-EXR-Screenshot" />

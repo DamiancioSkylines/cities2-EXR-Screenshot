@@ -3,29 +3,34 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using Game.Prefabs.Climate;
+using Game.Rendering;
+using Game.Simulation;
+using Unity.Entities;
 using UnityEngine;
 using UnityEngine.Rendering;
 using Object = UnityEngine.Object;
-using Game.Rendering;
-using Unity.Entities;
 
 namespace EXRScreenshot.Systems
 {
     public static class VolumeInspection
     {
-        // Caches for reflection to improve performance during log generation
-        private static readonly Dictionary<Type, FieldInfo[]> SFieldCache = new();
-        private static readonly Dictionary<Type, PropertyInfo> SPropertyCache = new();
+        // Caches for reflection to improve performance during metadata generation
+        private static readonly Dictionary<Type, FieldInfo[]> FieldCache = new();
+        private static readonly Dictionary<Type, PropertyInfo> PropertyCache = new();
+        
+        private static DayNightCycleData _cachedDayNightData;
+        private static bool _isDayNightDataSearched;
 
         /// <summary>
         /// Retrieves and caches all fields (public and non-public instance) for a given type.
         /// </summary>
         private static FieldInfo[] GetCachedFields(Type type)
         {
-            if (!SFieldCache.TryGetValue(type, out var fields))
+            if (!FieldCache.TryGetValue(type, out var fields))
             {
                 fields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-                SFieldCache[type] = fields;
+                FieldCache[type] = fields;
             }
             return fields;
         }
@@ -35,12 +40,21 @@ namespace EXRScreenshot.Systems
         /// </summary>
         private static PropertyInfo GetCachedValueProperty(Type type)
         {
-            if (!SPropertyCache.TryGetValue(type, out var propertyInfo))
+            if (!PropertyCache.TryGetValue(type, out var propertyInfo))
             {
                 propertyInfo = type.GetProperty("value");
-                SPropertyCache[type] = propertyInfo;
+                PropertyCache[type] = propertyInfo;
             }
             return propertyInfo;
+        }
+
+        /// <summary>
+        /// Formats field names by stripping the "m_" prefix
+        /// </summary>
+        private static string GetCleanName(MemberInfo member)
+        {
+            var name = member.Name;
+            return name.StartsWith("m_", StringComparison.Ordinal) && name.Length > 2 ? name[2..] : name;
         }
 
         /// <summary>
@@ -50,14 +64,19 @@ namespace EXRScreenshot.Systems
         {
             var world = World.DefaultGameObjectInjectionWorld;
             var climateRenderSystem = world?.GetExistingSystemManaged<ClimateRenderSystem>();
+            var climateSystem = world?.GetExistingSystemManaged<ClimateSystem>();
+            var timeSystem = world?.GetExistingSystemManaged<TimeSystem>();
+            var planetarySystem = world?.GetExistingSystemManaged<PlanetarySystem>();
 
             var stringBuilder = new StringBuilder();
             try 
             {
                 var allVolumes = GetAllCandidateVolumes(climateRenderSystem, world).ToList();
-
+                
                 LogEffectiveRenderVolumeStackParameters(stringBuilder, allVolumes);
-                LogAllVolumesWithParameters(stringBuilder, climateRenderSystem, allVolumes);
+                LogAllVolumesWithParameters(stringBuilder, allVolumes);
+                LogClimateSeasonAndTime(stringBuilder, climateSystem, climateRenderSystem, timeSystem, planetarySystem);
+                LogDayNightCycleData(stringBuilder, world);
             }
             catch (Exception exception)
             {
@@ -86,9 +105,9 @@ namespace EXRScreenshot.Systems
             stringBuilder.AppendLine("[EFFECTIVE RENDER VOLUME STACK PARAMETERS]");
             stringBuilder.AppendLine("   (Note: Post-processing parameters below are logged for reference, but are NOT baked into EXR pixels, more info on github page)");
             // Sort active volumes by priority (ascending) so lower-priority volumes form 
-            // the baseline, and higher-priority volumes can correctly blend over them sequentially using BlendValues helper class
+            // the baseline, and higher priority volumes can correctly blend over them sequentially using BlendValues helper class
             var activeVolumes = precomputedVolumes
-                .Where(volume => volume&& volume.enabled && volume.gameObject.activeInHierarchy && volume.weight > 0 && GetSafeProfile(volume))
+                .Where(volume => volume is not null && volume.enabled && volume.gameObject.activeInHierarchy && volume.weight > 0f)
                 .OrderBy(volume => volume.priority)
                 .ToList();
 
@@ -104,6 +123,8 @@ namespace EXRScreenshot.Systems
             foreach (var volume in activeVolumes)
             {
                 var safeProfile = GetSafeProfile(volume);
+                if (safeProfile is null) continue;
+
                 foreach (var component in safeProfile.components)
                 {
                     if (component is null || !component.active) continue;
@@ -121,13 +142,11 @@ namespace EXRScreenshot.Systems
                         if (!typeof(VolumeParameter).IsAssignableFrom(field.FieldType)) continue;
                         
                         // Skip parameters that do not have overrideState enabled
-                        if (field.GetValue(component) is not VolumeParameter{ overrideState: true } parameter) continue;
+                        if (field.GetValue(component) is not VolumeParameter { overrideState: true } parameter) continue;
                         
                         var valueProperty = GetCachedValueProperty(field.FieldType);
                         var value = valueProperty?.GetValue(parameter);
-                                
-                        // Clean up field names by stripping the "m_" prefix using range syntax [2..]
-                        var cleanName = field.Name.StartsWith("m_") ? field.Name[2..] : field.Name;
+                        var cleanName = GetCleanName(field);
 
                         if (parameterDictionary.TryGetValue(cleanName, out var existingValue))
                         {
@@ -155,7 +174,7 @@ namespace EXRScreenshot.Systems
             stringBuilder.AppendLine();
         }
 
-        private static void LogAllVolumesWithParameters(StringBuilder stringBuilder, ClimateRenderSystem climateRenderSystem, List<Volume> precomputedVolumes)
+        private static void LogAllVolumesWithParameters(StringBuilder stringBuilder, List<Volume> precomputedVolumes)
         {
             stringBuilder.AppendLine("[SCENE VOLUMES LIST]");
 
@@ -163,14 +182,13 @@ namespace EXRScreenshot.Systems
             {
                 var safeProfile = GetSafeProfile(volume);
                 if (safeProfile is null) continue;
-                
-                // Skip the built-in procedural weather volume managed by ClimateRenderSystem
-                if (climateRenderSystem?.climateControlVolume is not null && volume == climateRenderSystem.climateControlVolume) continue;
 
                 stringBuilder.AppendLine($"   [Volume: {volume.gameObject.name}] Priority: {volume.priority} | Weight: {volume.weight} | Enabled: {volume.enabled}");
 
-                foreach (var component in safeProfile.components.Where(component => component is not null && component.active))
+                foreach (var component in safeProfile.components)
                 {
+                    if (component is null || !component.active) continue;
+
                     stringBuilder.AppendLine($"      Component: {component.GetType().Name}");
                     LogComponentOverrides(stringBuilder, component, "         ");
                 }
@@ -194,29 +212,163 @@ namespace EXRScreenshot.Systems
             // Include all standard volumes found in the scene graph (active or inactive)
             foreach (var volume in Object.FindObjectsByType<Volume>(FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
-                if (volume) volumeSet.Add(volume);
+                if (volume is not null) volumeSet.Add(volume);
             }
 
             // Early exit if world or systems are missing (handles the ECS check once)
-            if (world?.Systems == null) return volumeSet;
+            if (world?.Systems is null) return volumeSet;
 
             // Scan internal Photo Mode ECS systems for active internal volume references
             foreach (var system in world.Systems)
             {
-                if (system == null || !system.GetType().Name.Contains("Photo")) continue;
+                if (system is null) continue;
 
                 foreach (var field in GetCachedFields(system.GetType()))
                 {
                     if (!typeof(Volume).IsAssignableFrom(field.FieldType)) continue;
-                    if (field.GetValue(system) is not Volume photoVolume || !photoVolume) continue;
-
-                    volumeSet.Add(photoVolume);
+                    
+                    if (field.GetValue(system) is Volume photoVolume)
+                    {
+                        volumeSet.Add(photoVolume);
+                    }
                 }
             }
 
             return volumeSet;
         }
         
+        /// <summary>
+        /// Gathers and logs simulation climate properties, in-game time, date, and coordinates.
+        /// </summary>
+        private static void LogClimateSeasonAndTime(StringBuilder stringBuilder, ClimateSystem climateSystem, ClimateRenderSystem climateRenderSystem, TimeSystem timeSystem, PlanetarySystem planetarySystem)
+        {
+            stringBuilder.AppendLine("[TIME, COORDINATE, SEASON/WEATHER]");
+            
+            if (timeSystem is not null)
+            {
+                stringBuilder.AppendLine($"   Current Date Time = {timeSystem.GetCurrentDateTime()}");
+                stringBuilder.AppendLine($"   normalizedTime = {timeSystem.normalizedTime:F3}");
+                stringBuilder.AppendLine($"   normalizedDate = {timeSystem.normalizedDate:F3}");
+            }
+            
+            if (planetarySystem is not null)
+            {
+                stringBuilder.AppendLine($"   latitude = {planetarySystem.latitude}");
+                stringBuilder.AppendLine($"   longitude = {planetarySystem.longitude}");
+            }
+
+            if (climateSystem is not null)
+            {
+                stringBuilder.AppendLine($"   wind = {climateSystem.wind}");
+                stringBuilder.AppendLine($"   hail = {climateSystem.hail}");
+                stringBuilder.AppendLine($"   rainbow = {climateSystem.rainbow}");
+                stringBuilder.AppendLine($"   precipitation = {(float)climateSystem.precipitation}");
+                stringBuilder.AppendLine($"   temperature = {(float)climateSystem.temperature}");
+                stringBuilder.AppendLine($"   cloudiness = {(float)climateSystem.cloudiness}");
+                stringBuilder.AppendLine($"   aurora = {(float)climateSystem.aurora}");
+                stringBuilder.AppendLine($"   fog = {(float)climateSystem.fog}");
+                stringBuilder.AppendLine($"   isRaining = {climateSystem.isRaining}");
+                stringBuilder.AppendLine($"   isSnowing = {climateSystem.isSnowing}");
+                stringBuilder.AppendLine($"   isPrecipitating = {climateSystem.isPrecipitating}");
+                stringBuilder.AppendLine($"   classification = {climateSystem.classification}");
+                stringBuilder.AppendLine($"   currentSeasonName = {climateSystem.currentSeasonName ?? "null"}");
+            }
+            else
+            {
+                stringBuilder.AppendLine("   ClimateSystem (Simulation) not found in current world.");
+            }
+            
+            stringBuilder.AppendLine();
+            stringBuilder.AppendLine("[WEATHER PREFABS & SEASON OVERRIDES FOR CLIMATE CONTROL]");
+            stringBuilder.AppendLine("   (Note: These prefabs dynamically drive the parameters of the active ClimateControlVolume above)");
+
+            foreach (var weatherPrefab in climateRenderSystem?.fromWeatherPrefabs ?? Enumerable.Empty<WeatherPrefab>())
+            {
+                if (weatherPrefab is null) continue;
+
+                stringBuilder.AppendLine($"   Weather Prefab: {weatherPrefab.name}"); 
+            
+                if (weatherPrefab.overrideableProperties is null) continue;
+                foreach (var property in weatherPrefab.overrideableProperties)
+                {
+                    if (property is null) continue;
+                    stringBuilder.AppendLine($"      Override Component: {property.name}");
+                    LogOverrideComponentProperties(stringBuilder, property, "            ");
+                }
+            }
+
+            stringBuilder.AppendLine();
+        }
+        
+        /// <summary>
+        /// Gathers and logs Day/Night cycle parameters, sun angle thresholds, and active LUT texture assets.
+        /// </summary>
+        private static void LogDayNightCycleData(StringBuilder stringBuilder, World world)
+        {
+            stringBuilder.AppendLine();
+            stringBuilder.AppendLine("[DAY/NIGHT CYCLE]");
+            stringBuilder.AppendLine("   (Note: Defines sun angle thresholds, exposure caps, time filters, and 3D LUT textures that are never enabled afaik)");
+
+            if (_cachedDayNightData is null && !_isDayNightDataSearched)
+            {
+                _cachedDayNightData = FindDayNightCycleDataFromWorldSystems(world);
+                _isDayNightDataSearched = true;
+            }
+
+            if (_cachedDayNightData is null)
+            {
+                stringBuilder.AppendLine("   DayNightCycleData asset not found in memory.");
+                return;
+            }
+
+            stringBuilder.AppendLine($"   Asset Name: {_cachedDayNightData.name}");
+
+            foreach (var field in GetCachedFields(_cachedDayNightData.GetType()))
+            {
+                var value = field.GetValue(_cachedDayNightData);
+                var cleanName = GetCleanName(field);
+
+                if (value is Texture3D tex3d)
+                {
+                    stringBuilder.AppendLine($"      {cleanName} = {tex3d.name}");
+                }
+                else
+                {
+                    stringBuilder.AppendLine($"      {cleanName} = {value ?? "null"}");
+                }
+            }
+
+            stringBuilder.AppendLine();
+        }
+
+        /// <summary>
+        /// Discovers DayNightCycleData purely via managed C# system references in RAM.
+        /// Completely avoids Unity engine C++ scene/resource searches.
+        /// </summary>
+        private static DayNightCycleData FindDayNightCycleDataFromWorldSystems(World world)
+        {
+            if (world?.Systems is null) return null;
+
+            // Fast C# reflection walk across all active managed DOTS Systems registered in the World
+            foreach (var system in world.Systems)
+            {
+                if (system is null) continue;
+
+                foreach (var field in GetCachedFields(system.GetType()))
+                {
+                    if (typeof(DayNightCycleData).IsAssignableFrom(field.FieldType))
+                    {
+                        if (field.GetValue(system) is DayNightCycleData data)
+                        {
+                            return data;
+                        }
+                    }
+                }
+            }
+
+            return null;
+        }
+
         /// <summary>
         /// Inspects a volume component via reflection and logs its overridden parameters.
         /// </summary>
@@ -232,10 +384,20 @@ namespace EXRScreenshot.Systems
 
                 var valueProperty = GetCachedValueProperty(field.FieldType);
                 var value = valueProperty?.GetValue(parameter);
+                var cleanName = GetCleanName(field);
+
+                stringBuilder.AppendLine($"{indent}{cleanName} = {value ?? "null"}");
+            }
+        }
         
-                // Clean up field names by stripping the "m_" prefix using range syntax [2..]
-                var cleanName = field.Name.StartsWith("m_") ? field.Name[2..] : field.Name;
-                stringBuilder.AppendLine($"{indent}{cleanName} = {value}");
+        private static void LogOverrideComponentProperties(StringBuilder stringBuilder, OverrideablePropertiesComponent property, string indent = "         ")
+        {
+            foreach (var field in GetCachedFields(property.GetType()))
+            {
+                var value = field.GetValue(property);
+                var cleanName = GetCleanName(field);
+
+                stringBuilder.AppendLine($"{indent}{cleanName} = {value ?? "null"}");
             }
         }
 
@@ -244,7 +406,7 @@ namespace EXRScreenshot.Systems
         /// </summary>
         private static object BlendValues(object oldValue, object newValue, float weight)
         {
-            if (weight >= 1f || oldValue == null) return newValue;
+            if (weight >= 1f || oldValue is null) return newValue;
 
             return oldValue switch
             {
