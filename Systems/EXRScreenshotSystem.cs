@@ -40,27 +40,27 @@ namespace EXRScreenshot.Systems
                 
             if (Mod.Setting.MetadataLogging)
             {
-                currentMetadata = VolumeInspection.GetActiveMetadata();
+                try{currentMetadata = VolumeInspection.GetActiveMetadata();}
+                catch (Exception e){Mod.LOG.Error($"[EXRScreenshotSystem] Metadata failed: {e.Message}");}
             }
 
             try
             {
-                // 1. Prepare Target Size for Render Target Texture
+                // Prepare target resolution
                 var originalRTWidth = RTHandles.rtHandleProperties.currentViewportSize.x;
                 var originalRTHeight = RTHandles.rtHandleProperties.currentViewportSize.y;
                 var scale = Mod.Setting.TakeSuperResolution ? Mod.Setting.SupersampleScale : 1.0f;
                 var targetWidth = Mathf.RoundToInt(mainCam.pixelWidth * scale);
                 var targetHeight = Mathf.RoundToInt(mainCam.pixelHeight * scale);
-
                 if (Mod.Setting.DebugLogging) { Mod.LOG.Info($"[EXRScreenshotSystem] EXR capture coroutine started: {targetWidth}x{targetHeight} (Scale: {scale}x)"); }
 
-                // 2. Setup Capture Render Target texture and Render Target Handle
+                // Setup Capture Render Target texture and Render Target Handle
                 var captureRT = new RenderTexture(targetWidth, targetHeight, 0, GraphicsFormat.R16G16B16A16_SFloat);
                 captureRT.name = "EXRScreenshot_Capture_Target";
                 captureRT.Create();
                 var captureRTHandle = RTHandles.Alloc(captureRT);
 
-                // 3. Force Camera to recognize the high-res target
+                // Force Camera to recognize the high-res target
                 var hdData = mainCam.GetComponent<HDAdditionalCameraData>();
                 var originalAllowDynRes = hdData.allowDynamicResolution;
                 hdData.allowDynamicResolution = false; // "Disable" DLSS/FSR for capture frame
@@ -82,12 +82,10 @@ namespace EXRScreenshot.Systems
                 // Dynamically read user setting to allow temporal effects (SSR, SSGI, AO) to resolve
                 var warmupFrames = (int)Mod.Setting.AccumulationFramesDropdown;
                 if (Mod.Setting.DebugLogging && warmupFrames > 0)
-                {
-                    Mod.LOG.Info($"[EXRScreenshotSystem] Warming up for {warmupFrames} accumulation frames...");
-                }
+                { Mod.LOG.Info($"[EXRScreenshotSystem] Warming up for {warmupFrames} accumulation frames..."); }
                 for (var i = 0; i < warmupFrames; i++) yield return new WaitForEndOfFrame();
 
-                // 4. Setup Custom Pass
+                // Setup Custom Pass
                 var targetVolume = Object.FindObjectsByType<CustomPassVolume>(FindObjectsSortMode.None)
                     .FirstOrDefault(v => v.name == "EXRScreenshot_CaptureVolume");
 
@@ -113,57 +111,65 @@ namespace EXRScreenshot.Systems
                     HDUtils.BlitCameraTexture(ctx.cmd, colorBuffer, captureRTHandle);
                     frameCaptured = true;
 
+                    var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+                    var exrPath = Path.GetFullPath(Path.Combine(Application.persistentDataPath, "Screenshots", "EXR", $"Screenshot_{timestamp}.exr"));
+                    var textPath = Path.ChangeExtension(exrPath, ".txt");
+                    var exrDir = Path.GetDirectoryName(exrPath);
+                    
                     ctx.cmd.RequestAsyncReadback(captureRT, request =>
                     {
-                        if (request.hasError)
+                        try
                         {
-                            Mod.LOG.Error("[EXRScreenshotSystem] GPU Readback error.");
-                            readbackFinished = true;
-                            return;
-                        }
-
-                        // Cast custom enum to Unity's expected EXRFlags
-                        var compressionFlag = (Texture2D.EXRFlags)Mod.Setting.CompressionDropdown;
-
-                        // EncodeNativeArrayToEXR is a Unity API — must run on main thread.
-                        var exrBytes = ImageConversion.EncodeNativeArrayToEXR(
-                            request.GetData<byte>(),
-                            captureRT.graphicsFormat,
-                            (uint)targetWidth,
-                            (uint)targetHeight,
-                            0,
-                            compressionFlag
-                        );
-
-                        // Copy encoded bytes to managed array before handing off.
-                        // NativeArray and exrBytes are only valid on this thread.
-                        var encodedBytes = exrBytes.ToArray();
-                        exrBytes.Dispose();
-
-                        // Only the file write goes to background thread — safe, no Unity APIs.
-                        System.Threading.Tasks.Task.Run(() =>
-                        {
-                            try
+                            if (request.hasError)
                             {
-                                var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
-                                var rawPath = Path.Combine(Application.persistentDataPath, "Screenshots", "EXR", $"Screenshot_{timestamp}.exr");
-                                var cleanPath = Path.GetFullPath(rawPath);
-                                var dir = Path.GetDirectoryName(cleanPath);
-                                
-                                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
-
-                                // Save EXR
-                                File.WriteAllBytes(cleanPath, encodedBytes);
-                                if (Mod.Setting.DebugLogging) { Mod.LOG.Info($"[EXRScreenshotSystem] Saved EXR: {cleanPath}");}
-                                
-                                // Save Metadata
-                                if (!Mod.Setting.MetadataLogging || currentMetadata == null) return;
-                                var metadataPath = rawPath.Replace(".exr", ".txt");
-                                File.WriteAllText(metadataPath, currentMetadata);
+                                Mod.LOG.Error("[EXRScreenshotSystem] GPU Readback error.");
+                                readbackFinished = true;
+                                return;
                             }
-                            catch (Exception e) { Mod.LOG.Error($"[EXRScreenshotSystem] IO Error: {e.Message}"); }
-                            finally { readbackFinished = true; }
-                        });
+                            
+                            var compressionFlag = (Texture2D.EXRFlags)Mod.Setting.CompressionDropdown;
+
+                            // EncodeNativeArrayToEXR is a Unity API — must run on main thread.
+                            var exrBytes = ImageConversion.EncodeNativeArrayToEXR(
+                                request.GetData<byte>(),
+                                captureRT.graphicsFormat,
+                                (uint)targetWidth,
+                                (uint)targetHeight,
+                                0,
+                                compressionFlag
+                            );
+
+                            // Copy encoded bytes to managed array before handing off.
+                            var encodedBytes = exrBytes.ToArray();
+                            exrBytes.Dispose();
+                            
+                            System.Threading.Tasks.Task.Run(() =>
+                            {
+                                try
+                                {
+
+                                    if (!string.IsNullOrEmpty(exrDir) && !Directory.Exists(exrDir)) Directory.CreateDirectory(exrDir);
+
+                                    // Save EXR
+                                    File.WriteAllBytes(exrPath, encodedBytes);
+                                    if (Mod.Setting.DebugLogging) { Mod.LOG.Info($"[EXRScreenshotSystem] Saved EXR: {exrPath}"); }
+
+                                    // Save Metadata
+                                    if (Mod.Setting.MetadataLogging && currentMetadata != null)
+                                    {
+                                        File.WriteAllText(textPath, currentMetadata);
+                                    }
+                                }
+                                catch (Exception e) { Mod.LOG.Error($"[EXRScreenshotSystem] IO Error: {e.Message}"); }
+                                finally { readbackFinished = true; }
+                            });
+                        }
+                        catch (Exception e)
+                        {
+                            Mod.LOG.Error($"[EXRScreenshotSystem] Readback processing failed: {e.Message}");
+                            // Just in case smth shitfaced
+                            readbackFinished = true; 
+                        }
                     });
                 };
 
