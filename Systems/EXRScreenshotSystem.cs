@@ -54,7 +54,7 @@ namespace EXRScreenshot.Systems
                 var targetHeight = Mathf.RoundToInt(mainCam.pixelHeight * scale);
                 if (Mod.Setting.DebugLogging) { Mod.LOG.Info($"[EXRScreenshotSystem] EXR capture coroutine started: {targetWidth}x{targetHeight} (Scale: {scale}x)"); }
 
-                // Setup Capture Render Target texture and Render Target Handle
+                // Setup Capture Target
                 var captureRT = new RenderTexture(targetWidth, targetHeight, 0, GraphicsFormat.R16G16B16A16_SFloat);
                 captureRT.name = "EXRScreenshot_Capture_Target";
                 captureRT.Create();
@@ -64,25 +64,22 @@ namespace EXRScreenshot.Systems
                 var hdData = mainCam.GetComponent<HDAdditionalCameraData>();
                 var originalAllowDynRes = hdData.allowDynamicResolution;
                 hdData.allowDynamicResolution = false; // "Disable" DLSS/FSR for capture frame
-                
-                // superResRT acts as the temporary high-res 'canvas' for the camera.
-                // 24-bit depth is required here to ensure geometry/shadows are calculated correctly at scale.
-                // RenderTextureFormat.DefaultHDR ensures compatibility with the engine's internal rendering.
-                var superResRT = RenderTexture.GetTemporary(targetWidth, targetHeight, 24, RenderTextureFormat.DefaultHDR);
+
+                // cameraRT acts as the temporary target for camera to render over time, because resolution change is initially empty.
+                // 24-bit depth and DefaultHDR is default game setup.
+                var cameraRT =
+                    RenderTexture.GetTemporary(targetWidth, targetHeight, 24, RenderTextureFormat.DefaultHDR);
                 var originalTarget = mainCam.targetTexture;
-                mainCam.targetTexture = superResRT;
-                
-                // Resize RTHandle system so G-Buffers (Depth/Normals) match the target
+                mainCam.targetTexture = cameraRT;
+
                 RTHandles.SetReferenceSize(targetWidth, targetHeight);
-                
-                // We wait for several frames to let SSR, AO, SSGI to resolve better
-                // O frames can break screenshots when glass is in the view not sure why so minimum should be at least 1 frame
-                // 1 frame is very noisy in SSGI and SSAO
-                // 16-32 frames is recommended for "Perfect" SSR/Temporal stability, but going all the way to 128 is possible but with some diminishing returns
-                // Dynamically read user setting to allow temporal effects (SSR, SSGI, AO) to resolve
+
+                // Wait for several frames while game renders on cameraRT, when done copy colour buffer using EXRCapturePass and blit to captureRT
+
+                // Warmup because SSR, AO, SSGI need more frames to resolve.
+                // No warmup frames break glass not sure why, while more frames suffer diminishing returns, denoising is post process I think.
                 var warmupFrames = (int)Mod.Setting.AccumulationFramesDropdown;
-                if (Mod.Setting.DebugLogging && warmupFrames > 0)
-                { Mod.LOG.Info($"[EXRScreenshotSystem] Warming up for {warmupFrames} accumulation frames..."); }
+                if (Mod.Setting.DebugLogging && warmupFrames > 0) { Mod.LOG.Info($"[EXRScreenshotSystem] Warming up for {warmupFrames} accumulation frames..."); }
                 for (var i = 0; i < warmupFrames; i++) yield return new WaitForEndOfFrame();
 
                 // Setup Custom Pass
@@ -103,7 +100,7 @@ namespace EXRScreenshot.Systems
                     targetVolume.customPasses.Add(capturePass);
                 }
 
-                var readbackFinished = false;
+                var exportFinished = false;
                 var frameCaptured = false;
 
                 capturePass.OnBufferReady = (ctx, colorBuffer) =>
@@ -123,7 +120,7 @@ namespace EXRScreenshot.Systems
                             if (request.hasError)
                             {
                                 Mod.LOG.Error("[EXRScreenshotSystem] GPU Readback error.");
-                                readbackFinished = true;
+                                exportFinished = true;
                                 return;
                             }
                             
@@ -161,14 +158,14 @@ namespace EXRScreenshot.Systems
                                     }
                                 }
                                 catch (Exception e) { Mod.LOG.Error($"[EXRScreenshotSystem] IO Error: {e.Message}"); }
-                                finally { readbackFinished = true; }
+                                finally { exportFinished = true; }
                             });
                         }
                         catch (Exception e)
                         {
                             Mod.LOG.Error($"[EXRScreenshotSystem] Readback processing failed: {e.Message}");
                             // Just in case smth shitfaced
-                            readbackFinished = true; 
+                            exportFinished = true;
                         }
                     });
                 };
@@ -179,11 +176,9 @@ namespace EXRScreenshot.Systems
 
                 // Restore Camera stuff after frame has been captured
                 mainCam.targetTexture = originalTarget;
-                RenderTexture.ReleaseTemporary(superResRT);
-                // CRITICAL: Shrink the RTHandle system back to original size to free VRAM
-                // As we need to render to a higher resolution than normal for a short period of time when we want Super Sample Resolution.
-                // After takin screenshot we do not require this resolution any more, the additional memory allocated is wasted.
-                // To avoid that, only way to reset the current maximum resolution is using ResetReferenceSize instead of SetReferenceSize that can only increase but not decrease size.
+                RenderTexture.ReleaseTemporary(cameraRT);
+                // Most Important: Shrink the RTHandle back to original size to free VRAM
+                // Only way to reset the current maximum resolution is using ResetReferenceSize instead of SetReferenceSize that can only increase but not decrease size.
                 // https://docs.unity3d.com/Packages/com.unity.render-pipelines.core@13.1/manual/rthandle-system-using.html
                 RTHandles.ResetReferenceSize(originalRTWidth, originalRTHeight);
                 
@@ -191,7 +186,7 @@ namespace EXRScreenshot.Systems
                 hdData.allowDynamicResolution = originalAllowDynRes;
 
                 // Wait for readback/disk — game should already be running normally
-                yield return new WaitUntil(() => readbackFinished);
+                yield return new WaitUntil(() => exportFinished);
 
                 // Clean-up captureRT stays alive until readback is done, aka consumed and no longer needed by the camera. THEN release
                 if (targetVolume) targetVolume.customPasses.Remove(capturePass);
@@ -201,7 +196,17 @@ namespace EXRScreenshot.Systems
 
                 if (Mod.Setting.DebugLogging) { Mod.LOG.Info("[EXRScreenshotSystem] EXR capture coroutine complete."); }
             }
-            finally { _isCapturing = false; }
+            finally
+            {
+                RestoreCamera();
+                _isCapturing = false;
+            }
+        }
+
+        // todo move restoration to this helper method
+        private void RestoreCamera()
+        {
+            
         }
     }
 }
