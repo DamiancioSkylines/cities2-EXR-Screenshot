@@ -112,17 +112,6 @@ namespace EXRScreenshot.Settings
                     "\n Refer to the GitHub technical reference I have gathered."
                 },
                 
-                /*
-                // ModeDropdown
-                { setting.GetOptionLabelLocaleID(nameof(Setting.ModeDropdown)), "Screenshot Mode" },
-                { setting.GetOptionDescLocaleID(nameof(Setting.ModeDropdown)), "Choose method for taking screenshots \n**New Method** grabs screenshot from  buffer before post processing \n**Old Method** grabs the screenshot after post process"},
-
-
-                // Screenshot Method Dropdown
-                { setting.GetOptionLabelLocaleID(nameof(Setting.ModeDropdown)), "Capture Method" },
-                { setting.GetEnumValueLocaleID(Setting.ScreenshotMethodEnum.NewMethod), "Advanced (RTHandle)" },
-                { setting.GetEnumValueLocaleID(Setting.ScreenshotMethodEnum.OldMethod), "Basic (Standard)" },
-                */
             };
             
         }

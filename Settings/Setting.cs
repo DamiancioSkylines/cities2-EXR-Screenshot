@@ -41,15 +41,6 @@ namespace EXRScreenshot.Settings
         /// <param name="mod">The mod instance associated with these settings.</param>
         public Setting(IMod mod) : base(mod) { }
         
-        /// <summary>
-        /// Defines the available modes for taking screenshots
-        /// </summary>
-        public enum ScreenshotMethodEnum
-        {
-            NewMethod = 0,
-            OldMethod = 1,
-        }
-        
         [SuppressMessage("ReSharper", "InconsistentNaming")]
         public enum CompressionMethodEnum
         {
@@ -87,14 +78,6 @@ namespace EXRScreenshot.Settings
         [SettingsUISection(MainTab, SettingsGroup)]
         public ProxyBinding KeyTakeScreenshot { get; set; }
         
-        
-        /// <summary>
-        /// Gets or sets the currently selected screenshot taking method.
-        /// </summary>
-        [SettingsUIHidden]
-        [SettingsUISection(MainTab, SettingsGroup)]
-        public ScreenshotMethodEnum ModeDropdown { get; set; } = ScreenshotMethodEnum.NewMethod;
-        
         /// <summary>
         /// Gets or sets the currently selected screenshot compression method.
         /// </summary>
@@ -110,7 +93,7 @@ namespace EXRScreenshot.Settings
         /// Gets or sets the currently selected screenshot accumulation wait frames.
         /// </summary>
         [SettingsUISection(MainTab, SettingsGroup)]
-        public AccumulationFramesEnum AccumulationFramesDropdown { get; set; } = AccumulationFramesEnum.TwoFrames;
+        public AccumulationFramesEnum AccumulationFramesDropdown { get; set; } = AccumulationFramesEnum.SixteenFrames;
         
         //[SettingsUIHidden]
         [SettingsUISection(MainTab, SettingsGroup)]
@@ -194,7 +177,6 @@ namespace EXRScreenshot.Settings
         {
             TakeSuperResolution = false;
             SupersampleScale = 1.0f;
-            ModeDropdown = ScreenshotMethodEnum.NewMethod;
             CompressionDropdown = CompressionMethodEnum.CompressPIZ;
             AccumulationFramesDropdown = AccumulationFramesEnum.SixteenFrames;
             DebugLogging = false;
