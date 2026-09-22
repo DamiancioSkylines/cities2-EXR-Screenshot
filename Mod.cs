@@ -19,43 +19,42 @@ namespace EXRScreenshot
 
         private static ProxyAction _takeScreenshotAction;
         public const string TakeScreenshotActionName = "TakeScrenshot";
+        
+        private EXRScreenshotSystem _exrScreenshotSystem;
 
         public void OnLoad(UpdateSystem updateSystem)
         {
             Setting = new Setting(this);
             Setting.RegisterInOptionsUI();
             GameManager.instance.localizationManager.AddSource("en-US", new LocaleEn(Setting));
-
-            // Instantiate the system once. The constructor sets EXRScreenshotSystem.Instance.
-            new EXRScreenshotSystem();
-
             Setting.RegisterKeyBindings();
+            
+            _exrScreenshotSystem =  new EXRScreenshotSystem();
 
             _takeScreenshotAction = Setting.GetAction(TakeScreenshotActionName);
             _takeScreenshotAction.shouldBeEnabled = true;
-
-            _takeScreenshotAction.onInteraction += (_, phase) =>
-            {
-                if (phase != InputActionPhase.Canceled) return;
-
-                if (EXRScreenshotSystem.Instance != null)
-                {
-                    EXRScreenshotSystem.Instance.CaptureEXR();
-                }
-                else
-                {
-                    LOG.Error("EXRScreenshotSystem is not initialized!");
-                }
-            };
+            _takeScreenshotAction.onInteraction += OnScreenshotInteraction;
 
             AssetDatabase.global.LoadSettings(nameof(EXRScreenshot), Setting, new Setting(this));
 
             if (Setting.DebugLogging) LOG.Info(nameof(OnLoad));
         }
 
+        private void OnScreenshotInteraction(ProxyAction action, InputActionPhase phase)
+        {
+            if (phase != InputActionPhase.Canceled) return;
+            _exrScreenshotSystem?.CaptureEXR();
+        }
+
         public void OnDispose()
         {
-            if (Setting != null)
+            if (_takeScreenshotAction is not null)
+            {
+                _takeScreenshotAction.onInteraction -= OnScreenshotInteraction;
+                _takeScreenshotAction = null;
+            }
+            
+            if (Setting is not null)
             {
                 Setting.UnregisterInOptionsUI();
                 Setting = null;

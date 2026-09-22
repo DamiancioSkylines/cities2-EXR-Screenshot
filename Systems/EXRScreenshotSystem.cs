@@ -13,14 +13,11 @@ namespace EXRScreenshot.Systems
 {
     public class EXRScreenshotSystem
     {
-        public static EXRScreenshotSystem Instance;
         private bool _isCapturing;
         
         public EXRScreenshotSystem()
         {
             _isCapturing = false;
-            if (Instance != null) Mod.LOG.Warn("[EXRScreenshotSystem] Duplicate EXRScreenshotSystem detected.");
-            Instance = this;
             if (Mod.Setting.DebugLogging) Mod.LOG.Info("[EXRScreenshotSystem] EXRScreenshotSystem initialized.");
         }
         
