@@ -101,8 +101,8 @@ namespace EXRScreenshot.Systems
                 _originalAllowDynRes = _hdData.allowDynamicResolution;
                 _hdData.allowDynamicResolution = false; // "Disable" DLSS/FSR for capture frame
 
-                // cameraRT acts as the temporary target for camera to render over time, because resolution change is initially empty.
-                // 24-bit depth and DefaultHDR is default game setup.
+                // cameraRT is temporary target for camera to render over time, because of resolution change is initially empty.
+                // 24-bit depth buffer and DefaultHDR is default game setup
                 _cameraRT = RenderTexture.GetTemporary(targetWidth, targetHeight, 24, RenderTextureFormat.DefaultHDR);
                 _originalTarget = _mainCam.targetTexture;
                 _mainCam.targetTexture = _cameraRT;
@@ -201,7 +201,8 @@ namespace EXRScreenshot.Systems
             }
             finally
             {
-                //RestoreCamera();
+                // Restore and release even if coroutine would fall apart
+                RestoreCamera();
                 ReleaseCaptureTarget();
                 
                 _isCapturing = false;
@@ -211,11 +212,11 @@ namespace EXRScreenshot.Systems
         
         private void RestoreCamera()
         {
-            _captureVolume.enabled = false;
-            _capturePass.OnBufferReady = null;
-            _mainCam.targetTexture = _originalTarget;
-            _hdData.allowDynamicResolution = _originalAllowDynRes;
-            RenderTexture.ReleaseTemporary(_cameraRT);
+            if (_captureVolume) { _captureVolume.enabled = false; }
+            if (_capturePass is not null) { _capturePass.OnBufferReady = null; }
+            if (_mainCam) { _mainCam.targetTexture = _originalTarget; }
+            if (_hdData) { _hdData.allowDynamicResolution = _originalAllowDynRes; }
+            if (_cameraRT) { RenderTexture.ReleaseTemporary(_cameraRT); _cameraRT = null; }
             // Most Important: Shrink the RTHandle back to original size to free VRAM
             // Only way to reset the current maximum resolution is using ResetReferenceSize instead of SetReferenceSize that can only increase but not decrease size.
             // https://docs.unity3d.com/Packages/com.unity.render-pipelines.core@13.1/manual/rthandle-system-using.html
@@ -227,9 +228,8 @@ namespace EXRScreenshot.Systems
 
         private void ReleaseCaptureTarget()
         {
-            _captureRTHandle.Release();
-            _captureRT.Release();
-            Object.Destroy(_captureRT);
+            // _captureRTHandle.Release removes captureRT automatically, but not before exportFinished
+            if (_captureRTHandle is not null) { _captureRTHandle.Release(); _captureRTHandle = null; _captureRT = null; }
         }
 
         public void Cleanup()
@@ -238,8 +238,11 @@ namespace EXRScreenshot.Systems
             if (_captureCoroutine is not null && GameManager.instance)
             {
                 GameManager.instance.StopCoroutine(_captureCoroutine); 
-                // if (Mod.Setting.DebugLogging) { Mod.LOG.Info("[EXRScreenshotSystem] EXR capture coroutine stopped"); }
+                if (Mod.Setting.DebugLogging) { Mod.LOG.Info("[EXRScreenshotSystem] EXR capture coroutine stopped"); }
             }
+
+            RestoreCamera();
+            ReleaseCaptureTarget();
 
             if (_captureVolumeHolder != null)
             {
