@@ -6,6 +6,8 @@ using UnityEngine.Rendering.HighDefinition;
 using System.Collections;
 using System.IO;
 using Game.SceneFlow;
+using Game.Simulation;
+using Unity.Entities;
 using Object = UnityEngine.Object;
 
 namespace EXRScreenshot.Systems
@@ -30,6 +32,9 @@ namespace EXRScreenshot.Systems
         private bool _originalAllowDynRes;
         private int _originalRTWidth;
         private int _originalRTHeight;
+
+        private SimulationSystem _simulationSystem;
+        private float _originalSpeed;
 
         public EXRScreenshotSystem()
         {
@@ -57,6 +62,14 @@ namespace EXRScreenshot.Systems
             _captureCoroutine = GameManager.instance.StartCoroutine(CaptureRoutine());
         }
 
+        // <summary>
+        // Overall core logic is:
+        // Pause simulation, change resolution
+        // Wait some frames, while game renders into cameraRT so SSR/SSAO/SSGI accumulates
+        // EXRCapturePass grabs framebuffer and blit copy it to captureRTHandle its captureRT texture
+        // Asynchronous read GPU texture data and encode and save to EXR
+        // Disable Volume and Pass, Restore original camera stuff and release memory.
+        // </summary>
         private IEnumerator CaptureRoutine()
         {
             
@@ -80,6 +93,15 @@ namespace EXRScreenshot.Systems
             _originalRTWidth = RTHandles.rtHandleProperties.currentViewportSize.x;
             _originalRTHeight = RTHandles.rtHandleProperties.currentViewportSize.y;
 
+            _simulationSystem = World.DefaultGameObjectInjectionWorld?.GetOrCreateSystemManaged<SimulationSystem>();
+            _originalSpeed = 1f;
+
+            if (_simulationSystem is not null)
+            {
+                _originalSpeed = _simulationSystem.selectedSpeed;
+                _simulationSystem.selectedSpeed = 0; // Pause simulation
+            }
+            
             try
             {
                 _isCapturing = true;
@@ -96,10 +118,12 @@ namespace EXRScreenshot.Systems
                 _captureRT.Create();
                 _captureRTHandle = RTHandles.Alloc(_captureRT);
 
-                // Force Camera to recognize the high-res target
-                _hdData = _mainCam.GetComponent<HDAdditionalCameraData>();
-                _originalAllowDynRes = _hdData.allowDynamicResolution;
-                _hdData.allowDynamicResolution = false; // "Disable" DLSS/FSR for capture frame
+                // Force Camera screen resolution or super resolution
+                if (_mainCam.TryGetComponent(out _hdData))
+                {
+                    _originalAllowDynRes = _hdData.allowDynamicResolution;
+                    _hdData.allowDynamicResolution = false; // "Disable" DLSS/FSR for capture frame
+                }
 
                 // cameraRT is temporary target for camera to render over time, because of resolution change is initially empty.
                 // 24-bit depth buffer and DefaultHDR is default game setup
@@ -224,6 +248,7 @@ namespace EXRScreenshot.Systems
             {
                 RTHandles.ResetReferenceSize(_originalRTWidth, _originalRTHeight);
             }
+            if (_simulationSystem is not null) { _simulationSystem.selectedSpeed = _originalSpeed; }
         }
 
         private void ReleaseCaptureTarget()
