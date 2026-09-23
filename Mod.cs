@@ -29,7 +29,7 @@ namespace EXRScreenshot
             GameManager.instance.localizationManager.AddSource("en-US", new LocaleEn(Setting));
             Setting.RegisterKeyBindings();
             
-            _exrScreenshotSystem =  new EXRScreenshotSystem();
+            _exrScreenshotSystem = new EXRScreenshotSystem();
 
             _takeScreenshotAction = Setting.GetAction(TakeScreenshotActionName);
             _takeScreenshotAction.shouldBeEnabled = true;
@@ -52,6 +52,12 @@ namespace EXRScreenshot
             {
                 _takeScreenshotAction.onInteraction -= OnScreenshotInteraction;
                 _takeScreenshotAction = null;
+            }
+
+            if (_exrScreenshotSystem is not null)
+            {
+                _exrScreenshotSystem.Cleanup();
+                _exrScreenshotSystem = null;
             }
             
             if (Setting is not null)

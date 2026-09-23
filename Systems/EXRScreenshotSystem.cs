@@ -13,12 +13,12 @@ namespace EXRScreenshot.Systems
     public class EXRScreenshotSystem
     {
         private bool _isCapturing;
-
-        private RenderTexture _originalTarget;
-        private RenderTexture _cameraRT;
-
-        private RenderTexture _captureRT;
+        private Coroutine _captureCoroutine;
+        
         private RTHandle _captureRTHandle;
+        private RenderTexture _captureRT;
+        private RenderTexture _cameraRT;
+        private RenderTexture _originalTarget;
 
         private readonly GameObject _captureVolumeHolder;
         private readonly CustomPassVolume _captureVolume;
@@ -26,6 +26,7 @@ namespace EXRScreenshot.Systems
         
         private Camera _mainCam;
         private HDAdditionalCameraData _hdData;
+        
         private bool _originalAllowDynRes;
         private int _originalRTWidth;
         private int _originalRTHeight;
@@ -53,7 +54,7 @@ namespace EXRScreenshot.Systems
                 if (Mod.Setting.DebugLogging) { Mod.LOG.Info("[EXRScreenshotSystem] Capture already in progress, ignoring.");}
                 return;
             }
-            GameManager.instance.StartCoroutine(CaptureRoutine());
+            _captureCoroutine = GameManager.instance.StartCoroutine(CaptureRoutine());
         }
 
         private IEnumerator CaptureRoutine()
@@ -65,7 +66,7 @@ namespace EXRScreenshot.Systems
                 
             if (Mod.Setting.MetadataLogging)
             {
-                try{currentMetadata = VolumeInspection.GetActiveMetadata();}
+                try {currentMetadata = VolumeInspection.GetActiveMetadata();}
                 catch (Exception e){Mod.LOG.Error($"[EXRScreenshotSystem] Metadata failed: {e.Message}");}
             }
 
@@ -82,6 +83,7 @@ namespace EXRScreenshot.Systems
             try
             {
                 _isCapturing = true;
+                
                 // Prepare target resolution
                 var scale = Mod.Setting.TakeSuperResolution ? Mod.Setting.SupersampleScale : 1.0f;
                 var targetWidth = Mathf.RoundToInt(_mainCam.pixelWidth * scale);
@@ -204,6 +206,7 @@ namespace EXRScreenshot.Systems
             {
                 //RestoreCamera();
                 _isCapturing = false;
+                _captureCoroutine = null;
             }
         }
         
@@ -227,6 +230,23 @@ namespace EXRScreenshot.Systems
             _captureRTHandle.Release();
             _captureRT.Release();
             Object.Destroy(_captureRT);
+        }
+
+        public void Cleanup()
+        {
+            // Called from Mod's onDispose
+            if (_captureCoroutine is not null && GameManager.instance)
+            {
+                GameManager.instance.StopCoroutine(_captureCoroutine); 
+                // if (Mod.Setting.DebugLogging) { Mod.LOG.Info("[EXRScreenshotSystem] EXR capture coroutine stopped"); }
+            }
+
+            if (_captureVolumeHolder != null)
+            {
+                Object.Destroy(_captureVolumeHolder);
+                // if (Mod.Setting.DebugLogging) { Mod.LOG.Info("[EXRScreenshotSystem] CaptureVolumeHolder destroyed."); }
+            }
+            
         }
     }
 }
