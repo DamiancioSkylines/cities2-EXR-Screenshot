@@ -129,7 +129,7 @@ namespace EXRScreenshot.Systems
 
                     var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
                     var exrPath = Path.GetFullPath(Path.Combine(Application.persistentDataPath, "Screenshots", "EXR", $"Screenshot_{timestamp}.exr"));
-                    var textPath = Path.ChangeExtension(exrPath, ".txt");
+                    var txtPath = Path.ChangeExtension(exrPath, ".txt");
                     var exrDir = Path.GetDirectoryName(exrPath);
                     
                     ctx.cmd.RequestAsyncReadback(_captureRT, request =>
@@ -173,7 +173,7 @@ namespace EXRScreenshot.Systems
                                     // Save Metadata
                                     if (Mod.Setting.MetadataLogging && currentMetadata != null)
                                     {
-                                        File.WriteAllText(textPath, currentMetadata);
+                                        File.WriteAllText(txtPath, currentMetadata);
                                     }
                                 }
                                 catch (Exception e) { Mod.LOG.Error($"[EXRScreenshotSystem] IO Error: {e.Message}"); }
@@ -194,17 +194,16 @@ namespace EXRScreenshot.Systems
                 yield return new WaitUntil(() => frameCaptured);
                 
                 RestoreCamera();
-                // Wait for readback/disk — game should already be running normally
-                yield return new WaitUntil(() => exportFinished);
-
-                // Clean-up captureRT stays alive until readback is done, aka consumed and no longer needed by the camera. THEN release
-                ReleaseCaptureTarget();
                 
+                // Game should already be running normally, but hold on before releasing captureRTHandle
+                yield return new WaitUntil(() => exportFinished);
                 if (Mod.Setting.DebugLogging) { Mod.LOG.Info("[EXRScreenshotSystem] EXR capture coroutine complete."); }
             }
             finally
             {
                 //RestoreCamera();
+                ReleaseCaptureTarget();
+                
                 _isCapturing = false;
                 _captureCoroutine = null;
             }
@@ -212,19 +211,20 @@ namespace EXRScreenshot.Systems
         
         private void RestoreCamera()
         {
-            // Restore Camera stuff after frame has been captured
             _captureVolume.enabled = false;
+            _capturePass.OnBufferReady = null;
             _mainCam.targetTexture = _originalTarget;
+            _hdData.allowDynamicResolution = _originalAllowDynRes;
             RenderTexture.ReleaseTemporary(_cameraRT);
             // Most Important: Shrink the RTHandle back to original size to free VRAM
             // Only way to reset the current maximum resolution is using ResetReferenceSize instead of SetReferenceSize that can only increase but not decrease size.
             // https://docs.unity3d.com/Packages/com.unity.render-pipelines.core@13.1/manual/rthandle-system-using.html
-            RTHandles.ResetReferenceSize(_originalRTWidth, _originalRTHeight);
-                
-            // Restore DLSS/FSR ability to reduce internal resolution
-            _hdData.allowDynamicResolution = _originalAllowDynRes;
-            
+            if (_originalRTWidth > 0 && _originalRTHeight > 0)
+            {
+                RTHandles.ResetReferenceSize(_originalRTWidth, _originalRTHeight);
+            }
         }
+
         private void ReleaseCaptureTarget()
         {
             _captureRTHandle.Release();
