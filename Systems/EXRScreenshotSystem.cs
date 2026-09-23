@@ -5,7 +5,6 @@ using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering.HighDefinition;
 using System.Collections;
 using System.IO;
-using System.Linq;
 using Game.SceneFlow;
 using Object = UnityEngine.Object;
 
@@ -14,11 +13,37 @@ namespace EXRScreenshot.Systems
     public class EXRScreenshotSystem
     {
         private bool _isCapturing;
+
+        private RenderTexture _originalTarget;
+        private RenderTexture _cameraRT;
+
+        private RenderTexture _captureRT;
+        private RTHandle _captureRTHandle;
+
+        private readonly GameObject _captureVolumeHolder;
+        private readonly CustomPassVolume _captureVolume;
+        private readonly EXRCapturePass _capturePass;
         
+        private Camera _mainCam;
+        private HDAdditionalCameraData _hdData;
+        private bool _originalAllowDynRes;
+        private int _originalRTWidth;
+        private int _originalRTHeight;
+
         public EXRScreenshotSystem()
         {
-            _isCapturing = false;
             if (Mod.Setting.DebugLogging) Mod.LOG.Info("[EXRScreenshotSystem] EXRScreenshotSystem initialized.");
+            
+            _captureVolumeHolder = new GameObject("EXRScreenshot_CaptureVolume");
+            Object.DontDestroyOnLoad(_captureVolumeHolder); // Prevents it from being deleted during scene shenanigans
+            
+            _captureVolume = _captureVolumeHolder.AddComponent<CustomPassVolume>();
+            _captureVolume.isGlobal = true;
+            _captureVolume.injectionPoint = CustomPassInjectionPoint.BeforePostProcess;
+            
+            _capturePass = new EXRCapturePass();
+            _captureVolume.customPasses.Add(_capturePass);
+            _captureVolume.enabled = false;
         }
         
         public void CaptureEXR()
@@ -33,9 +58,9 @@ namespace EXRScreenshot.Systems
 
         private IEnumerator CaptureRoutine()
         {
-            _isCapturing = true;
-            var mainCam = Camera.main; // This is only for highly unlikely NRE 'System.NullReferenceException' 
-            if (!mainCam) yield break;
+            
+            _mainCam = Camera.main;
+            if (!_mainCam) yield break;
             string currentMetadata = null;
                 
             if (Mod.Setting.MetadataLogging)
@@ -44,35 +69,45 @@ namespace EXRScreenshot.Systems
                 catch (Exception e){Mod.LOG.Error($"[EXRScreenshotSystem] Metadata failed: {e.Message}");}
             }
 
+            _captureRTHandle = null;
+            _cameraRT = null;
+            
+            _originalAllowDynRes = false;
+            _hdData = null;
+            _originalTarget = null;
+            
+            _originalRTWidth = RTHandles.rtHandleProperties.currentViewportSize.x;
+            _originalRTHeight = RTHandles.rtHandleProperties.currentViewportSize.y;
+
             try
             {
+                _isCapturing = true;
                 // Prepare target resolution
-                var originalRTWidth = RTHandles.rtHandleProperties.currentViewportSize.x;
-                var originalRTHeight = RTHandles.rtHandleProperties.currentViewportSize.y;
                 var scale = Mod.Setting.TakeSuperResolution ? Mod.Setting.SupersampleScale : 1.0f;
-                var targetWidth = Mathf.RoundToInt(mainCam.pixelWidth * scale);
-                var targetHeight = Mathf.RoundToInt(mainCam.pixelHeight * scale);
+                var targetWidth = Mathf.RoundToInt(_mainCam.pixelWidth * scale);
+                var targetHeight = Mathf.RoundToInt(_mainCam.pixelHeight * scale);
                 if (Mod.Setting.DebugLogging) { Mod.LOG.Info($"[EXRScreenshotSystem] EXR capture coroutine started: {targetWidth}x{targetHeight} (Scale: {scale}x)"); }
 
                 // Setup Capture Target
-                var captureRT = new RenderTexture(targetWidth, targetHeight, 0, GraphicsFormat.R16G16B16A16_SFloat);
-                captureRT.name = "EXRScreenshot_Capture_Target";
-                captureRT.Create();
-                var captureRTHandle = RTHandles.Alloc(captureRT);
+                _captureRT = new RenderTexture(targetWidth, targetHeight, 0, GraphicsFormat.R16G16B16A16_SFloat);
+                _captureRT.name = "EXRScreenshot_Capture_Target";
+                _captureRT.Create();
+                _captureRTHandle = RTHandles.Alloc(_captureRT);
 
                 // Force Camera to recognize the high-res target
-                var hdData = mainCam.GetComponent<HDAdditionalCameraData>();
-                var originalAllowDynRes = hdData.allowDynamicResolution;
-                hdData.allowDynamicResolution = false; // "Disable" DLSS/FSR for capture frame
+                _hdData = _mainCam.GetComponent<HDAdditionalCameraData>();
+                _originalAllowDynRes = _hdData.allowDynamicResolution;
+                _hdData.allowDynamicResolution = false; // "Disable" DLSS/FSR for capture frame
 
                 // cameraRT acts as the temporary target for camera to render over time, because resolution change is initially empty.
                 // 24-bit depth and DefaultHDR is default game setup.
-                var cameraRT =
-                    RenderTexture.GetTemporary(targetWidth, targetHeight, 24, RenderTextureFormat.DefaultHDR);
-                var originalTarget = mainCam.targetTexture;
-                mainCam.targetTexture = cameraRT;
+                _cameraRT = RenderTexture.GetTemporary(targetWidth, targetHeight, 24, RenderTextureFormat.DefaultHDR);
+                _originalTarget = _mainCam.targetTexture;
+                _mainCam.targetTexture = _cameraRT;
 
                 RTHandles.SetReferenceSize(targetWidth, targetHeight);
+                
+                _captureVolume.enabled = true;
 
                 // Wait for several frames while game renders on cameraRT, when done copy colour buffer using EXRCapturePass and blit to captureRT
 
@@ -81,31 +116,13 @@ namespace EXRScreenshot.Systems
                 var warmupFrames = (int)Mod.Setting.AccumulationFramesDropdown;
                 if (Mod.Setting.DebugLogging && warmupFrames > 0) { Mod.LOG.Info($"[EXRScreenshotSystem] Warming up for {warmupFrames} accumulation frames..."); }
                 for (var i = 0; i < warmupFrames; i++) yield return new WaitForEndOfFrame();
-
-                // Setup Custom Pass
-                var targetVolume = Object.FindObjectsByType<CustomPassVolume>(FindObjectsSortMode.None)
-                    .FirstOrDefault(v => v.name == "EXRScreenshot_CaptureVolume");
-
-                if (!targetVolume)
-                {
-                    targetVolume = new GameObject("EXRScreenshot_CaptureVolume").AddComponent<CustomPassVolume>();
-                    targetVolume.isGlobal = true;
-                }
-
-                targetVolume.injectionPoint = CustomPassInjectionPoint.BeforePostProcess;
-                var capturePass = targetVolume.customPasses.OfType<EXRCapturePass>().FirstOrDefault();
-                if (capturePass == null)
-                {
-                    capturePass = new EXRCapturePass();
-                    targetVolume.customPasses.Add(capturePass);
-                }
-
+                
                 var exportFinished = false;
                 var frameCaptured = false;
 
-                capturePass.OnBufferReady = (ctx, colorBuffer) =>
+                _capturePass.OnBufferReady = (ctx, colorBuffer) =>
                 {
-                    HDUtils.BlitCameraTexture(ctx.cmd, colorBuffer, captureRTHandle);
+                    HDUtils.BlitCameraTexture(ctx.cmd, colorBuffer, _captureRTHandle);
                     frameCaptured = true;
 
                     var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
@@ -113,7 +130,7 @@ namespace EXRScreenshot.Systems
                     var textPath = Path.ChangeExtension(exrPath, ".txt");
                     var exrDir = Path.GetDirectoryName(exrPath);
                     
-                    ctx.cmd.RequestAsyncReadback(captureRT, request =>
+                    ctx.cmd.RequestAsyncReadback(_captureRT, request =>
                     {
                         try
                         {
@@ -129,7 +146,7 @@ namespace EXRScreenshot.Systems
                             // EncodeNativeArrayToEXR is a Unity API — must run on main thread.
                             var exrBytes = ImageConversion.EncodeNativeArrayToEXR(
                                 request.GetData<byte>(),
-                                captureRT.graphicsFormat,
+                                _captureRT.graphicsFormat,
                                 (uint)targetWidth,
                                 (uint)targetHeight,
                                 0,
@@ -170,43 +187,46 @@ namespace EXRScreenshot.Systems
                     });
                 };
 
-                capturePass.RequestFrame();
+                _capturePass.RequestFrame();
                 // Wait for the frame to be captured
                 yield return new WaitUntil(() => frameCaptured);
-
-                // Restore Camera stuff after frame has been captured
-                mainCam.targetTexture = originalTarget;
-                RenderTexture.ReleaseTemporary(cameraRT);
-                // Most Important: Shrink the RTHandle back to original size to free VRAM
-                // Only way to reset the current maximum resolution is using ResetReferenceSize instead of SetReferenceSize that can only increase but not decrease size.
-                // https://docs.unity3d.com/Packages/com.unity.render-pipelines.core@13.1/manual/rthandle-system-using.html
-                RTHandles.ResetReferenceSize(originalRTWidth, originalRTHeight);
                 
-                // Restore DLSS/FSR ability to reduce internal resolution
-                hdData.allowDynamicResolution = originalAllowDynRes;
-
+                RestoreCamera();
                 // Wait for readback/disk — game should already be running normally
                 yield return new WaitUntil(() => exportFinished);
 
                 // Clean-up captureRT stays alive until readback is done, aka consumed and no longer needed by the camera. THEN release
-                if (targetVolume) targetVolume.customPasses.Remove(capturePass);
-                captureRTHandle.Release();
-                captureRT.Release();
-                Object.Destroy(captureRT);
-
+                ReleaseCaptureTarget();
+                
                 if (Mod.Setting.DebugLogging) { Mod.LOG.Info("[EXRScreenshotSystem] EXR capture coroutine complete."); }
             }
             finally
             {
-                RestoreCamera();
+                //RestoreCamera();
                 _isCapturing = false;
             }
         }
-
-        // todo move restoration to this helper method
+        
         private void RestoreCamera()
         {
+            // Restore Camera stuff after frame has been captured
+            _captureVolume.enabled = false;
+            _mainCam.targetTexture = _originalTarget;
+            RenderTexture.ReleaseTemporary(_cameraRT);
+            // Most Important: Shrink the RTHandle back to original size to free VRAM
+            // Only way to reset the current maximum resolution is using ResetReferenceSize instead of SetReferenceSize that can only increase but not decrease size.
+            // https://docs.unity3d.com/Packages/com.unity.render-pipelines.core@13.1/manual/rthandle-system-using.html
+            RTHandles.ResetReferenceSize(_originalRTWidth, _originalRTHeight);
+                
+            // Restore DLSS/FSR ability to reduce internal resolution
+            _hdData.allowDynamicResolution = _originalAllowDynRes;
             
+        }
+        private void ReleaseCaptureTarget()
+        {
+            _captureRTHandle.Release();
+            _captureRT.Release();
+            Object.Destroy(_captureRT);
         }
     }
 }
