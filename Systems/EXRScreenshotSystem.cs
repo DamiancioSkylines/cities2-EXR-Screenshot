@@ -140,7 +140,7 @@ namespace EXRScreenshot.Systems
                 // Warmup because SSR, AO, SSGI need more frames to resolve.
                 // No warmup frames break glass not sure why, while more frames suffer diminishing returns, denoising is post process I think.
                 var warmupFrames = (int)Mod.Setting.AccumulationFramesDropdown;
-                if (Mod.Setting.DebugLogging && warmupFrames > 0) { Mod.LOG.Info($"[EXRScreenshotSystem] Warming up for {warmupFrames} accumulation frames..."); }
+                if (Mod.Setting.DebugLogging && warmupFrames > 0) { Mod.LOG.Info($"[EXRScreenshotSystem] Accumulating {warmupFrames} frames..."); }
                 for (var i = 0; i < warmupFrames; i++) yield return new WaitForEndOfFrame();
                 
                 var exportFinished = false;

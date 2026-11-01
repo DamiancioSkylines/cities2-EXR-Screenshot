@@ -11,10 +11,11 @@
         <!--The file where mod information which is required for publishing mod on PDX mods are stored-->
         <PublishConfigurationPath>Properties\PublishConfiguration.xml</PublishConfigurationPath>
         <LangVersion>default</LangVersion>
-        <RootNamespace>EXRScreenshot</RootNamespace>
+        <AssemblyName>EXR Screenshot</AssemblyName>
+        <RootNamespace>EXR Screenshot</RootNamespace>
 
         <!--So the Mod Version works in game settings and possibly skyve -->
-        <Version>1.1.4</Version>
+        <Version>1.1.5</Version>
         <FileVersion>$(Version)</FileVersion>
         <AssemblyVersion>$(Version)</AssemblyVersion>
     </PropertyGroup>

@@ -19,21 +19,17 @@ namespace EXRScreenshot.Settings
     /// This class defines UI groups, tab order, and keyboard/gamepad actions for various mod functionalities and general mod settings.
     /// </remarks>
     // Mod settings class, handling UI and keybindings.
-    [FileLocation("ModsSettings/" + nameof(EXRScreenshot))]
-    // Define the order of groups within the tabs
+    [FileLocation("ModsSettings/EXRScreenshot/" + nameof(EXRScreenshot))]
     [SettingsUIGroupOrder(SettingsGroup,LinksGroup)]
-    // Show group names
     [SettingsUIShowGroupName(SettingsGroup,LinksGroup)]
-    // Define tab order e.g
     // [SettingsUITabOrder(MainTab, KSecondTab)]
 
     [SettingsUIKeyboardAction(Mod.TakeScreenshotActionName, usages: new [] { Usages.kMenuUsage, "MyUsage" }, interactions: new [] { "UIButton" })]
     public class Setting : ModSetting
     {
         public const string MainTab = "MainTab";
-        public const string SettingsGroup = "EXRSettingsGroup";
-        //public const string ResetGroup = "EXRResetGroup";
-        public const string LinksGroup = "EXRLinksGroup";
+        public const string SettingsGroup = "SettingsGroup";
+        public const string LinksGroup = "LinksGroup";
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Setting"/> class.
@@ -84,18 +80,20 @@ namespace EXRScreenshot.Settings
         [SettingsUISection(MainTab, SettingsGroup)]
         public CompressionMethodEnum CompressionDropdown { get; set; } = CompressionMethodEnum.CompressPIZ;
         
-        //[SettingsUIHidden]
-        [SettingsUISection(MainTab, SettingsGroup)]
-        [SettingsUISlider(min = 1.0f, max = 4.0f, step = 0.5f, unit = "Scale")]
-        public float SupersampleScale { get; set; } = 1.0f;
-        
         /// <summary>
         /// Gets or sets the currently selected screenshot accumulation wait frames.
         /// </summary>
         [SettingsUISection(MainTab, SettingsGroup)]
         public AccumulationFramesEnum AccumulationFramesDropdown { get; set; } = AccumulationFramesEnum.SixteenFrames;
         
-        //[SettingsUIHidden]
+        [SettingsUIHideByCondition(typeof(Setting), nameof(HideSuperResolutionSlider))]
+        //[SettingsUIWarning(typeof(Setting),nameof(WarnAboutScale))]
+        [SettingsUISection(MainTab, SettingsGroup)]
+        [SettingsUISlider(min = 100.0f, max = 400.0f, step = 50.0f, unit = "percentage" , scalarMultiplier = 100f, updateOnDragEnd = false)]
+        public float SupersampleScale { get; set; } = 1.0f;
+
+        //public bool WarnAboutScale() { return SupersampleScale > 2.0; }
+        
         [SettingsUISection(MainTab, SettingsGroup)]
         public bool TakeSuperResolution { get; set; }
         
@@ -104,22 +102,6 @@ namespace EXRScreenshot.Settings
         
         [SettingsUISection(MainTab, SettingsGroup)]
         public bool DebugLogging { get; set; }
-        
-        // This button is actually not needed as reset exist in shortcut widget
-        [SettingsUIHidden]
-        [SettingsUIButton]
-        [SettingsUIButtonGroup("Reset")]
-        [SettingsUISection(MainTab, SettingsGroup)]
-        public bool ResetShortcuts
-        {
-            // ReSharper disable once ValueParameterNotUsed
-            set
-            {
-                if (Mod.Setting.DebugLogging) { Mod.LOG.Info("[Settings] Reset key bindings");}
-                ResetKeyBindings();
-            }
-        }
-        
         
         [SettingsUIButton]
         [SettingsUIButtonGroup("Reset")]
@@ -139,9 +121,9 @@ namespace EXRScreenshot.Settings
         [SettingsUIButtonGroup("Links")]
         [SettingsUISection(MainTab, LinksGroup)]
         [UsedImplicitly]
-        public bool DonateLink {
+        public bool KoFiLink {
             // ReSharper disable once ValueParameterNotUsed
-            set => Application.OpenURL("https://www.paypal.com/donate/?hosted_button_id=8VN8P4VJDAKKA");
+            set => Application.OpenURL("https://ko-fi.com/damiancioskylines");
         }
         
         [SettingsUIButton]
@@ -151,6 +133,15 @@ namespace EXRScreenshot.Settings
         public bool GithubLink {
             // ReSharper disable once ValueParameterNotUsed
             set => Application.OpenURL("https://github.com/DamiancioSkylines/cities2-EXR-Screenshot");
+        }
+        
+        /// <summary>
+        /// Determines whether the super resolution slider should be hidden in the UI.
+        /// </summary>
+        /// <returns><c>true</c> if the take super settings is ticked; otherwise, <c>false</c>.</returns>
+        public bool HideSuperResolutionSlider()
+        {
+            return !TakeSuperResolution;
         }
         
         /// <summary>

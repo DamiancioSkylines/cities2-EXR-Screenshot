@@ -19,7 +19,6 @@ namespace EXRScreenshot.Settings
                 { setting.GetOptionTabLocaleID(Setting.MainTab), "Main" },
                 
                 // Group Labels
-                //{ setting.GetOptionGroupLocaleID(Setting.ResetGroup), "Reset" }, 
                 { setting.GetOptionGroupLocaleID(Setting.SettingsGroup), "EXR Screenshot Settings" },
                 { setting.GetOptionGroupLocaleID(Setting.LinksGroup), "Links" }, 
                 
@@ -32,14 +31,12 @@ namespace EXRScreenshot.Settings
                 { setting.GetBindingMapLocaleID(), "EXR Screenshot Mod Settings" },
                 
                 // Reset
-                { setting.GetOptionLabelLocaleID(nameof(Setting.ResetShortcuts)), "Reset shortcuts" },
-                { setting.GetOptionDescLocaleID(nameof(Setting.ResetShortcuts)), "Reset all shortcuts of the mod"},
                 { setting.GetOptionLabelLocaleID(nameof(Setting.ResetSettings)), "Reset all settings     " },
                 { setting.GetOptionDescLocaleID(nameof(Setting.ResetSettings)), "Reset shortcuts and settings of the mod"},
                 
-                // Donate
-                { setting.GetOptionLabelLocaleID(nameof(Setting.DonateLink)), "Donate on Paypal" },
-                { setting.GetOptionDescLocaleID(nameof(Setting.DonateLink)), "Opens paypal donation page"},
+                // Ko-Fi
+                { setting.GetOptionLabelLocaleID(nameof(Setting.KoFiLink)), "Ko-Fi" },
+                { setting.GetOptionDescLocaleID(nameof(Setting.KoFiLink)), "Opens Ko-Fi page"},
                 
                 // Github
                 { setting.GetOptionLabelLocaleID(nameof(Setting.GithubLink)), "Source Code on Github" },
@@ -56,7 +53,7 @@ namespace EXRScreenshot.Settings
                 { setting.GetOptionDescLocaleID(nameof(Setting.SupersampleScale)), "Multiplier for the internal render resolution." +
                     "\n Upscaling like DLSS or FSR lowers base internal render resolution inside the GPU buffer that this mod sources the image from." +
                     "\n Mod will turn upscaling off temporarily during capture and restore original state after, effectively using native resolution as base of resolution scaling." +
-                    "\n Bigger scale takes longer to complete."
+                    "\n <Bigger scale takes longer to complete>"
                 },
                 
                 // Compression Dropdown
@@ -83,7 +80,8 @@ namespace EXRScreenshot.Settings
                     "\n This will result in longer capture but will accumulate more SSAO, SSGI for more resolved image" +
                     "\n Simply giving you less noise and more accurate contrast." +
                     "\n 16 - 32 frames is recommended, you can go above but returns are diminishing" +
-                    "\n Previous baseline was 2 frames."
+                    "\n Previous baseline was 2 frames." +
+                    "\n <More frames takes longer to complete>"
                 },
                 
                 // Accumulation Frames
