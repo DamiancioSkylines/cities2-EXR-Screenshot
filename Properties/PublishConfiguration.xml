@@ -8,7 +8,8 @@
 	<!--Long description of the mod. Single line or multi line. Supports minimal Markdown subset-->
 	<!--LongDescription Value="This mod lets you take EXR in linear colour space screenshots" /-->
 	<LongDescription>
-**WORK IN PROGRESS**
+**WORK IN PROGRESS** (Documentation)
+
 This mod is not meant for beauty shots. It's designed for creators who want to author custom LUTs using something like DaVinci Resolve.
 
 Unlike standard screenshots that bake display-referred colours, this mod captures internal scene-referred **Linear Rec.709** directly from the HDRP buffer.
@@ -28,14 +29,14 @@ Standard PNGs are 8-bit "Display" images. EXRs are "Data." By grading raw 16-bit
 **SHIFT + F1**: Capture EXR screenshot. With 4x SuperResolution screenshot can take a while, and performance recovers after couple seconds.
 
 ### Compatibility:
-Works with or without Lumina or Time &amp; Weather Anarchy.
+Works with or without Lumina or Time &amp; Weather Anarchy or RZColor.
 
 ### 📁 File Location
 Screenshots and Metadata are saved to:
 
 `%AppData%\LocalLow\Colossal Order\Cities Skylines II\Screenshots\EXR\`
 
-*Refer to the included README on GitHub for the exact DaVinci Resolve node setup and more details.*
+**Refer to the included README on GitHub for the exact DaVinci Resolve node setup and more details.** (Documentation still subject to update)
 	</LongDescription>
 	<!--Thumbnail-->
 	<Thumbnail Value="Properties/Thumbnail.png" />
