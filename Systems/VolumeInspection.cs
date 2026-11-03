@@ -167,7 +167,7 @@ namespace EXRScreenshot.Systems
                 stringBuilder.AppendLine($"   Component: {componentKvp.Key}");
                 foreach (var parameterKvp in componentKvp.Value.OrderBy(entry => entry.Key))
                 {
-                    stringBuilder.AppendLine($"      {parameterKvp.Key} = {parameterKvp.Value}");
+                    stringBuilder.AppendLine($"      {parameterKvp.Key} = {FormatParameterValue(parameterKvp.Value)}");
                 }
             }
 
@@ -386,7 +386,7 @@ namespace EXRScreenshot.Systems
                 var value = valueProperty?.GetValue(parameter);
                 var cleanName = GetCleanName(field);
 
-                stringBuilder.AppendLine($"{indent}{cleanName} = {value ?? "null"}");
+                stringBuilder.AppendLine($"{indent}{cleanName} = {FormatParameterValue(value)}");
             }
         }
         
@@ -412,11 +412,126 @@ namespace EXRScreenshot.Systems
             {
                 float floatOld when newValue is float floatNew => Mathf.Lerp(floatOld, floatNew, weight),
                 Color colorOld when newValue is Color colorNew => Color.Lerp(colorOld, colorNew, weight),
+                TextureCurve curveOld when newValue is TextureCurve curveNew => BlendCurves(curveOld, curveNew, weight),
+                AnimationCurve curveOld when newValue is AnimationCurve curveNew => BlendCurves(curveOld, curveNew, weight),
                 Vector4 vector4Old when newValue is Vector4 vector4New => Vector4.Lerp(vector4Old, vector4New, weight),
                 Vector3 vector3Old when newValue is Vector3 vector3New => Vector3.Lerp(vector3Old, vector3New, weight),
                 Vector2 vector2Old when newValue is Vector2 vector2New => Vector2.Lerp(vector2Old, vector2New, weight),
                 _ => newValue
             };
+        }
+
+        /// <summary>
+        /// Blends TextureCurve values mathematically in normalized range based on volume weights.
+        /// Range for TextureCurve should be always 0-1 while AnimationCurve can have any range really
+        /// </summary>
+        private static TextureCurve BlendCurves(TextureCurve oldCurve, TextureCurve newCurve, float weight)
+        {
+            if (weight >= 1f || oldCurve is null) return null;
+            if (newCurve is null) return oldCurve;
+            
+            var oldKeysLength = oldCurve.length;
+            var newKeysLength = newCurve.length;
+            var sampleCount = Math.Max(Math.Max(oldKeysLength, newKeysLength), 2);
+            var keys = new Keyframe[sampleCount];
+            
+            for (var i = 0; i < sampleCount; i++)
+            {
+                var normalizedCurveTime = i / ((float)sampleCount - 1);
+                var evaluatedOld = oldCurve.Evaluate(normalizedCurveTime);
+                var evaluatedNew = newCurve.Evaluate(normalizedCurveTime);
+                var blendedValue = Mathf.Lerp(evaluatedOld, evaluatedNew, weight);
+                keys[i] = new Keyframe(normalizedCurveTime, blendedValue);
+            }
+            
+            return new TextureCurve(keys, 0.5f, false, new Vector2(0f,1f));
+
+        }
+        
+        /// <summary>
+        /// Blends AnimationCurve values mathematically in normalized range based on volume weights.
+        /// </summary>
+        private static AnimationCurve BlendCurves(AnimationCurve oldCurve, AnimationCurve newCurve, float weight)
+        {
+            if (weight >= 1f || oldCurve is null) return null;
+            if (newCurve is null) return oldCurve;
+            
+            var minTime = Mathf.Min(oldCurve.keys[0].time, newCurve.keys[0].time);
+            var maxTime = Mathf.Max(oldCurve.keys[oldCurve.length - 1].time, newCurve.keys[newCurve.length - 1].time);
+
+            if (Mathf.Approximately(minTime, maxTime))
+            {
+                minTime = 0;
+                maxTime = 1;
+            }
+            
+            var oldKeysLength = oldCurve.length;
+            var newKeysLength = newCurve.length;
+            var sampleCount = Math.Max(Math.Max(oldKeysLength, newKeysLength), 2);
+            var keys = new Keyframe[sampleCount];
+            
+            for (var i = 0; i < sampleCount; i++)
+            {
+                var normalizedCurveTime = i / ((float)sampleCount - 1);
+                var evaluateTime = Mathf.Lerp(minTime, maxTime, normalizedCurveTime);
+                var evaluatedOld = oldCurve.Evaluate(evaluateTime);
+                var evaluatedNew = newCurve.Evaluate(evaluateTime);
+                var blendedValue = Mathf.Lerp(evaluatedOld, evaluatedNew, weight);
+                keys[i] = new Keyframe(evaluateTime, blendedValue);
+            }
+            return new AnimationCurve(keys);
+        }
+
+        /// <summary>
+        /// Format values into strings
+        /// </summary>
+        private static string FormatParameterValue(object value)
+        {
+            switch (value)
+            {
+                case TextureCurve textCurve:
+                    return FormatCurve(textCurve);
+                case AnimationCurve animationCurve:
+                    return FormatCurve(animationCurve);
+                default:
+                    return value?.ToString() ?? "null";
+            }
+        }
+        
+        /// <summary>
+        /// Format TextureCurve with its keys into strings
+        /// </summary>
+        private static string FormatCurve(TextureCurve textureCurve)
+        {
+            if (textureCurve is null) return "null";
+            var sb = new StringBuilder();
+            sb.Append($"TextureCurve Keys: {textureCurve.length} ");
+            
+            // Go through all keyframes of the curve hope it's not to many
+            for (var i = 0; i < textureCurve.length; i++)
+            {
+                var keyframe = textureCurve[i];
+                sb.Append($" [time: {keyframe.time:F2}, value: {keyframe.value:F2}]");
+            }
+            return sb.ToString();
+        }
+        
+        /// <summary>
+        /// Format AnimationCurve with its keys into strings
+        /// </summary>
+        private static string FormatCurve(AnimationCurve animationCurve)
+        {
+            if (animationCurve is null) return "null";
+            var sb = new StringBuilder();
+            sb.Append($"AnimationCurve Keys: {animationCurve.length} ");
+            
+            // Go through all keyframes of the curve hope it's not to many
+            for (var i = 0; i < animationCurve.length; i++)
+            {
+                var keyframe = animationCurve[i];
+                sb.Append($" [time: {keyframe.time:F2}, value: {keyframe.value:F2}]");
+            }
+            return sb.ToString();
         }
     }
 }

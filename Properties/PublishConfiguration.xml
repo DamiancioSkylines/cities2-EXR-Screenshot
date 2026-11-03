@@ -47,7 +47,7 @@ Screenshots and Metadata are saved to:
 	<!--Link to the forum post where the mod can be discussed-->
 	<ForumLink Value="https://forum.paradoxplaza.com/forum/threads/exr-screenshot.1916082/" />
 	<!--Version of the mod-->
-	<ModVersion Value="1.1.5" />
+	<ModVersion Value="1.1.6" />
 	<!--Recommended version of the base game to use the mod-->
 	<GameVersion Value="1.6.*" />
 	<!--Dependency for the mod, can be set multiple times-->
@@ -57,8 +57,7 @@ Screenshots and Metadata are saved to:
 	<!--Change log for new version. Single line or multi line. Supports minimal markdown subset-->
 	<ChangeLog Value="" />
 	<ChangeLog>
-- Settings location
-- UI polish
+- Metadata support now TextureCurves and AnimationCurves in volume parameters
 	</ChangeLog>
 	<!--External link, can be set multiple times. supported types are "discord", "github", "youtube", "twitch", "x", "paypal", "patreon", "buymeacoffee", "kofi", "crowdin", "gitlab", "gofundme"-->
 	<ExternalLink Type="github" Url="https://github.com/DamiancioSkylines/cities2-EXR-Screenshot" />
