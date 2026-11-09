@@ -131,7 +131,7 @@ All the tools you need are in Color tab of DaVinci **Shift + 6**
 Crucial thing is you establish your exposure and contrast early in node graph.
 If you export the LUT with initial project setup, exported LUT that will be equivalent to tonemapper set to "None".
 
-Most creative part is how you will treat the colours, after you establish your foundation this where majority of your vision comes in.
+Most creative part is how you will treat the colours, after you establish your foundation this is where majority of your vision comes in.
 
 You can split your Creative Look into couple separate nodes, for organization. For example:
 
