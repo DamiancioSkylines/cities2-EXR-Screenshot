@@ -60,7 +60,7 @@ Inside Project Settings **Shift + 9 > Color Management**:
 ### Node sandwich method
 
 Instead of using acquired LUT's in Color Management is to use them as sandwich of nodes around your colour grade for preview only and separate one just for export.
-In the Colour Tab node graph, use `Alt + S` to create 3-node sequence, right click on node and select listed LUT's.
+In the Color tab of DaVinci **Shift + 6** node graph, use `Alt + S` to create 3-node sequence, right click on node and select listed LUT's.
 
 Preview:
 - First node: `Linear to Unity Log r1`
@@ -162,11 +162,11 @@ To prevent seasonal climate colour overrides affecting your custom LUT use it th
 4. Set Shadows, Midtones Highlights to **0.2385156**[^2]
 5. Set the **Tonemapping Mode** to **External** select your **LUT**  from the list, and click **Load LUT**
 
-If you are using RZColor you should also disable the settings for now.
+If you are using RZColor you should also disable the settings for testing your LUT.
 
 If everything went right, your LUT should look almost exactly as you saw it in DaVinci.
 
-You can also share preset later in LUT Pack mod later, basic guide how to make pack is in official Lumina wiki, my LUT Packs have code slightly modified to support sharing presets.
+You can also share preset later in LUT Pack mod, basic guide how to make pack is in official Lumina wiki, my LUT Packs have code slightly modified to support sharing presets.
 
 ---
 
