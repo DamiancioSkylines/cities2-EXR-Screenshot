@@ -60,7 +60,7 @@ Inside Project Settings **Shift + 9 > Color Management**:
 ### Node sandwich method
 
 Instead of using acquired LUT's in Color Management is to use them as sandwich of nodes around your colour grade for preview only and separate one just for export.
-In the Color tab of DaVinci **Shift + 6** node graph, use `Alt + S` to create 3-node sequence, right click on node and select listed LUT's.
+In the Color tab of DaVinci **Shift + 6** node graph, use **Alt + S** to create 3-node sequence, right click on node and select listed LUT's.
 
 Preview:
 - First node: `Linear to Unity Log r1`
