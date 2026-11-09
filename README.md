@@ -1,448 +1,183 @@
-# EXR Screenshot Mod  Technical Reference
-## Cities Skylines 2 / HDRP 14 Linear Capture Pipeline
+# EXR Screenshot
+Is Cities Skylines 2 mod, providing clean, high dynamic range plate for proper LUT creation.
 
-Generally you should read whole thing, but most important things are at "📸 Professional Workflow: Linear HDR & LUT Creation". So bear with it and pardon unity mixed use of photography, colour science and legacy code language.
+LUT (Look-Up Table) is a static, highly performant mapping file that transforms input colours to specific output colours. It replaces the engine’s tonemapping, allowing to make your own together with colour adjustments in other word colour grading. In a way it is a static texture that shader reads from instead of calculating values in real time.
 
-This document traces the complete rendering pipeline from photons to pixels, sourced directly from decompiled game assemblies and verified against `Color.hlsl`. It is intended for colorists who need to understand the exact state of the captured buffer in order to author a LUT or grade in DaVinci Resolve.
+### **LUT pipeline**
 
-## 1. Capture Buffer Specification
+Game relies on explicit engine pipeline when forming image with external LUT involved.
 
-| Property | Value |
-| :--- | :--- |
-| **Buffer** | `cameraColorBuffer` at `CustomPassInjectionPoint.BeforePostProcess` |
-| **Format** | `B10G11R11_UFloatPack32` (RGB111110Float) |
-| **Encoding** | Linear scene-referred, HDR, unsigned float, **no alpha channel** |
-| **Bit depth** | 11/11/10 bits per channel (R/G/B) - shared 32 bits |
-| **Dynamic range** | Unclamped positive values; scene radiance in exposure-normalized units |
-| **Color space** | Linear (no gamma applied, no tonemapping) |
+> [!IMPORTANT]
+> scene linear Rec.709 (auto exposure) > effects > post exposure > all color adjustments > LinearToLogC (EI1000 0-1 range) > **External LUT** > linear Rec.709 > sRGB > Display
 
-> **Note on format precision:** The R11G11B10 format has a maximum value of ~65504 (same as fp16). It cannot represent negative values. Any highly specular or very dark pixels may lose precision compared to a full fp16 capture, but for scene-linear LUT authoring this is sufficient.
+This means we can not simply take normal screenshot to design your LUT around it, because it will never look remotely close later in game. A regular screenshot is taken too late in the pipeline.
+EXR Screenshot will be taken when the game colours are still in scene linear Rec.709 colour space, in full HDR range of this pipeline, before all color adjustments and effects in game.
 
-## 2. The Volume Stack - Priority Order
+Automatic exposure is applied in the EXR screenshot. Thats is what we want and will be always feed into our LUT in game, so both day a night have usable range, instead of being drastically over or underexposed.
 
-CS2 manages post-processing through multiple `Volume` objects. `VolumeManager` blends them in priority order - higher priority wins any parameter conflict. All game-owned runtime volumes use `HideFlags.DontSave` or `DontDestroyOnLoad`, which is why they are invisible to `Object.FindObjectsByType<Volume>()`.
-
-| Priority | Volume Name | Visibility | Owner System | Key Parameters |
-| :--- | :--- | :--- | :--- | :--- |
-| **-1** | `Render Settings` (scene asset) | Visible | Game scene | Sky (PhysicallyBasedSky), Volumetric Fog, SSAO, SSR, Cloud Layer, Wind |
-| **-1** | `Post Processing Settings` (scene asset) | Visible | Game scene | Exposure (AutomaticHistogram, limitMin −5, limitMax +15), Bloom, ACES Tonemapping, Motion Blur, Film Grain, Shadows/Midtones/Highlights |
-| **50** | `ClimateControlVolume` | **Hidden** | `ClimateRenderSystem` | Weather colour overrides blended from `WeatherPrefab.overrideableProperties`: ColorAdjustments (PostExposure, Contrast, ColorFilter, HueShift, Saturation), ShadowsMidtonesHighlights, WhiteBalance, VolumetricClouds, DistanceClouds, Fog, AtmosphereProperties |
-| **51** | `CameraControllerVolume` | **Hidden** | `CameraUpdateSystem` | Depth of Field, cascade shadow settings |
-| **1000** | `LightingPostProcessVolume` | Visible | `LightingSystem` | **Exposure** (AutomaticHistogram, limitMin/Max animated by time-of-day), **ColorAdjustments** (colorFilter + contrast animated Night → Sunrise → Day → Sunset via `DayNightCycleData`), **Tonemapping** (External LUT mode, `lutTexture` dynamically blended between NightLUT / SunriseLUT / DayLUT via `DayNight/LUTBlend.compute`), `IndirectLightingController`, `PhysicallyBasedSky` tints |
-| **1980** | `LuminaVolume` | Visible | `RenderEffectsSystem` | **Global Overrides:** Lighting Dimmers, Ambient Occlusion, Color Adjustments, Custom Tonemapping, Volumetric Cloud & Shadow parameters |
-| **2000** | `CinematicControlVolume` | **Hidden** | `PhotoModeRenderSystem` | Photo Mode / Cinematic camera: ColorAdjustments, WhiteBalance, ShadowsMidtonesHighlights, Vignette, Bloom, MotionBlur, DoF, Fog, Sky, FilmGrain, DistanceClouds, VolumetricClouds. **Weight = 0 when Photo Mode is inactive.** |
-
-### Non-Volume Visual Modifiers (Simulation Level)
-
-Some mods operate at the **Simulation/ECS level** and do not appear in the Volume stack because they modify source data *before* the rendering engine reads it.
-
-**Time and Weather Anarchy** - Direct ECS injection into `ClimateSystem` and `PlanetarySystem`. It does not create an HDRP Volume; instead it overrides raw simulation variables (`Precipitation`, `Cloudiness`, `Time`). Because it changes the data that `ClimateControlVolume` (priority 50) uses to calculate its visual weights, the effects are fully realized in the captured buffer.
-
-### Vanilla gameplay (no Photo Mode, no Lumina)
-The effective grading stack in order of increasing authority is:
-
-```
-Post Processing Settings (base exposure limits, ACES)
-  ↓ overridden by
-ClimateControlVolume (season & weather colour: SpringColorsOverride, etc.)
-  ↓ overridden by
-LightingPostProcessVolume (time-of-day colour filter, contrast)
-```
-
-### Technical Capture Note
-
-The EXR is captured at `BeforePostProcess`, so it contains the full results of Lumina's lighting/cloud overrides and Time and Weather Anarchy's atmospheric changes. Post-processing effects (Bloom, Grain, Tonemapping, etc.) are logged in the metadata but are **not** baked into the EXR pixels.
-
-## 3. The Climate Colour Override System
-
-`ClimateSystem` → `ClimateRenderSystem` → `WeatherPropertiesStack`
-
-Each game frame, `ClimateSystem` selects a set of `WeatherPrefab` objects representing the current season/weather. `ClimateRenderSystem` reads their `overrideableProperties` collections and calls `WeatherPropertiesStack.InterpolateOverrideData()` to blend between "from" and "to" states. The result is written directly to `ClimateControlVolume` (priority 50).
-
-**The blended properties that affect colour grading:**
-
-- `ColorAdjustmentsProperties` → PostExposure, Contrast, ColorFilter, HueShift, Saturation
-- `ShadowsMidtonesHighlightsProperties` → Shadows, Midtones, Highlights and their limits
-- `WhiteBalanceProperties` → Temperature, Tint
-- `VignetteProperties` → Intensity, Roundness, etc.
-
-**Example from Spring scene:**
-```
-DefaultContinental:   PostExposure=0.5, Contrast=0
-SpringColorsOverride: PostExposure=0.7, Contrast=100, Saturation=26, WhiteBalance Temp=+3, Vignette=0.25
-```
-
-`LightingPostProcessVolume` (priority 1000) overrides `colorFilter` and `contrast` for any parameters it has active. The climate volume's **PostExposure** is the only PostExposure contributor under vanilla gameplay (LightingPostProcessVolume does not set PostExposure), making it directly relevant to your EXR offset, if you want to simulate it while authoring.
-
-## 4. The LightingSystem Time-of-Day (And the Inactive LUT Blend)
-
-`LightingSystem` manages a three-way GPU LUT blend on `LightingPostProcessVolume` (priority 1000) using `DayNight/LUTBlend.compute`:
-
-```
-Night ──────→ SunriseAndSunsetLUT ──────→ DayLUT ──────→ SunriseAndSunsetLUT ──────→ Night
-```
-
-`LightingPostProcessVolume` (priority 1000). While the engine contains logic (DayNight/LUTBlend.compute) to manage a three-way GPU LUT blend between Night, Sunrise/Sunset, and Day states, these LUTs are never actually enabled in vanilla gameplay.
-
-Instead, the system relies purely on mathematical parameter animations: ColorAdjustments.colorFilter and .contrast are animated through Night/Sunrise/Day/Sunset values.
-
-**The exposure window is also narrowed at night:**
-- Day: `limitMin = DayExposureMin`, `limitMax = DayExposureMax`
-- Night: `limitMin = lerp(NightExposureLowMin, DayExposureMin, delta)`, `limitMax = NightExposureMax`
-
-## 5. The Full Post-Process Pipeline (Execution Order)
-
-Traced from `HDRenderPipeline.RenderPostProcess()`:
-
-```
-[1]  StopNaNsPass             Sanitises NaN and Inf pixels in the HDR buffer
-[2]  DynamicExposurePass      Reads scene histogram, computes EV100, writes to
-                              1×1 R32G32_SFloat exposure texture for NEXT FRAME
-[3]  DLSS / FSR2              (BeforePost upscaling, if enabled)
-[4]  CustomPostProcessPass    VolumeComponent-based: BeforeTAA slot
-[5]  TAA / SMAA               Temporal or morphological anti-aliasing
-[6]  CustomPostProcessPass    VolumeComponent-based: BeforePostProcess slot
-[7]  DepthOfFieldPass         Defocus blur
-[8]  DLSS / FSR2              (AfterDepthOfField, if enabled)
-[9]  MotionBlurPass           Camera + per-object motion blur
-[10] CustomPostProcessPass    VolumeComponent-based: AfterPPBlurs slot
-[11] PaniniProjectionPass     Wide-angle lens correction
-[12] Lens Flare               Compute occlusion pass
-[13] BloomPass                Produces bloomTexture for UberPass
-
-[14] ── ColorGradingPass (LutBuilder3D.compute "KBuild") ──────────────────────
-     BAKES the following into a 32³ R16G16B16A16 log-encoded 3D LUT:
-       • White Balance  (LMS colour coefficients from Temperature / Tint)
-       • Color Filter   (multiplied in linear)
-       • Channel Mixer  (R/G/B cross-channel matrix)
-       • Hue Shift      (hueShift / 360)
-       • Saturation     (saturation / 100 + 1)
-       • Contrast       (contrast / 100 + 1)
-       • Lift / Gamma / Gain
-       • Shadows / Midtones / Highlights  (values converted to linear first)
-       • Split Toning
-       • Curves: Master, R, G, B, HueVsHue, HueVsSat, LumVsSat, SatVsSat
-       • Tonemapping:   ACES_APPROX / ACES_FULL / Neutral / Custom Hable /
-                        External LUT (blended at lutContribution)
-     Result: an accumulated 32³ texture encoding the full grade + tonemapper.
-     THIS IS HASH-CACHED - only re-dispatches when a parameter changes.
-
-[15] Lens Flare data-driven compositing pass
-
-[16] ── UberPass (UberPost.compute "Uber") ────────────────────────────────────
-     Single compute dispatch; operates on every pixel:
-       • Lens Distortion
-       • Chromatic Aberration
-       • Vignette  (procedural or masked)
-       • Bloom compositing  (adds bloomTexture × bloomParams)
-       • PostExposure gain:  z = pow(2, postExposure.value)
-       • Log mapping:        colorLutSpace = saturate(LinearToLogC(color × z))
-       • LUT sampling:       SampleLUT3D(logLut, colorLutSpace)
-     Output: fully graded, tonemapped, bloom-composited result
-
-[17] Debug: push ColorLog fullscreen debug texture (if enabled)
-[18] CustomPostProcessPass    VolumeComponent-based: AfterPostProcess slot
-[19] FXAAPass                 (if dynamic resolution + FXAA enabled)
-[20] FinalPass                → backbuffer, with optional flip-Y
-```
-
-### The EXR Capture Point
-
-`CustomPassInjectionPoint.BeforePostProcess` runs **before** `RenderPostProcess()` is called - i.e., before step [1] above. Note DynamicExposurePass from preview frame will affect the EXR explained below and later.
-
-## 6. What Is (and Is Not) in the EXR
-
-### ✅ Included in the capture buffer
-
-| Item | Notes |
-| :--- | :--- |
-| Full HDR scene rendering | All deferred / forward geometry, indirect lighting, GI |
-| Direct and indirect lighting | Sunlight, moonlight, streetlights, emissives |
-| Volumetric fog and atmosphere | Physically-based sky integration |
-| SSR / SSGI | Screen-space reflections and global illumination |
-| All particle / VFX effects | Rain, snow, aurora, etc. |
-| Auto-exposure from previous frame | The scene buffer is **pre-exposed**: shaders multiply scene radiance by the exposure value from the prior frame's `DynamicExposurePass` texture. One-frame adaptive lag; negligible for a steady scene. |
-
-### ❌ Not included - applied after the capture point
-
-| Item                                  | Applied in |
-|:--------------------------------------| :--- |
-| **TAA**                               | Step [5] - inside `RenderPostProcess` |
-| **Depth of Field**                    | Step [7] |
-| **Motion Blur**                       | Step [9] |
-| Bloom                                 | Texture produced at step [13], composited in step [16] UberPass
-| **White Balance**                     | Step [14] - baked into 3D LUT |
-| **Contrast / Saturation / Hue Shift** | Step [14] - baked into 3D LUT |
-| **Shadows / Midtones / Highlights**   | Step [14] - baked into 3D LUT |
-| **Color Filter**                      | Step [14] - baked into 3D LUT |
-| **Tonemapping (ACES / game LUT)**     | Step [14] - baked into 3D LUT |
-| **PostExposure**                      | Step [16] UberPass - `color × pow(2, postExposure)` |
-| **Log mapping**                       | Step [16] UberPass - `LinearToLogC` |
-| **Vignette**                          | Step [16] UberPass |
-| **Chromatic Aberration**              | Step [16] UberPass |
-| **Film Grain**                        | Step [20] FinalPass |
-
-## 7. Reading the Metadata File
-
-Each EXR screenshot is accompanied by a .txt metadata log generated by VolumeInspection.GetActiveMetadata(). This log captures a snapshot of the combined effective render volume stack, individual scene volumes, and day/night configurations. It effectively documents the intended final post-processing state of the normal game view before the EXR capture intercepts the raw linear buffer.
-
-* **`[EFFECTIVE RENDER VOLUME STACK PARAMETERS]`** - Shows the final, mathematically blended output of all active overlapping volumes sorted by priority and weighted accordingly.
-* **`[SCENE VOLUMES LIST]`** - Lists all individual candidate volumes found in the scene and Photo Mode ECS systems, along with their priorities, weights, and overridden component parameters.
-* **`[TIME, COORDINATE, SEASON/WEATHER]"`** - Shows simulation values directly from TimeSystem, PlanetarySystem, and ClimateSystem.
-* **`[WEATHER PREFABS & SEASON OVERRIDES FOR CLIMATE CONTROL]`** - Shows active WeatherPrefab assets registered in the ClimateRenderSystem that dynamically drive the parameters of the procedural ClimateControlVolume, if currently in transition it will be correctly reflected in `[EFFECTIVE RENDER VOLUME STACK PARAMETERS]`.
-* **`[DAY/NIGHT CYCLE]`** - Shows settings from the game's managed DayNightCycleData asset, including sun elevation boundaries, exposure limits.
-
-Effective Render Volume Stack ParametersComputes the final, mathematically blended parameter values across all active scene volumes, accounting for volume weight ($0.0 \dots 1.0$), priority layer sorting, and active override states.
-
-With this file you can review and trace down from where the specific value comes from.
-
-### Example Snippet
-
-```
-[EFFECTIVE RENDER VOLUME STACK PARAMETERS]
-   (Note: Post-processing parameters below are logged for reference, but are NOT baked into EXR pixels, more info on github page)
-   Component: ColorAdjustments
-      ColorFilter = RGBA(1.000, 1.000, 1.000, 1.000)
-      Contrast = 10
-      PostExposure = 0.5
-   Component: ShadowsMidtonesHighlights
-      Shadows = RGBA(1.000, 1.000, 1.000, 0.000)
-      ...
-
-[SCENE VOLUMES LIST]
-   [Volume: LightingPostProcessVolume] Priority: 1000 | Weight: 1 | Enabled: True
-      Component: ColorAdjustments
-         PostExposure = 0.5
-   [Volume: Custom Climate Control Volume] Priority: 50 | Weight: 1 | Enabled: True
-      Component: WhiteBalance
-         Temperature = 5
-      ...
-[TIME, COORDINATE, SEASON/WEATHER]
-   Current Date Time = 06/21/2024 12:00:00
-   normalizedTime = 0.500
-   normalizedDate = 0.470
-   latitude = 61.5
-   longitude = 23.7
-   wind = 1.2
-   hail = 0
-   rainbow = 0
-   precipitation = 0
-   temperature = 18.5
-   cloudiness = 0.2
-   aurora = 0
-   fog = 0.05
-   isRaining = False
-   isSnowing = False
-   isPrecipitating = False
-   classification = Continental
-   currentSeasonName = Summer 
-   
-[WEATHER PREFABS & SEASON OVERRIDES FOR CLIMATE CONTROL]
-   (Note: These prefabs dynamically drive the parameters of the active ClimateControlVolume above)
-   WeatherPrefab: DefaultContinental
-      Override Component: ColorAdjustmentsProperties
-         PostExposure = 0.5
-      Override Component: WhiteBalanceProperties
-         Temperature = 0
-         ...
-   
-[DAY/NIGHT CYCLE]
-   (Note: Defines sun angle thresholds, exposure caps, time filters, and 3D LUT textures that are never enabled afaik)
-   Asset Name: DayNightData
-      DawnStartAngle = -0.1
-      SunriseMidpointAngle = 2
-      SunriseEndAngle = 5
-      SunsetStartAngle = 5
-      SunsetMidpointAngle = 2
-      ...
-      MoonLightColor = RGBA(0.807, 0.851, 0.925, 1.000)
-      MoonShadowTint = RGBA(0.000, 0.000, 0.000, 1.000)
-      ...
-      UseLUT = False
-      DayLUT = Ava 614
-      NightLUT = Byers 11
-      SunriseAndSunsetLUT = Vireo 37
-      LutContribution = 0.5
-```
-
-> **Important:** Post-processing effects like Bloom, Tonemapping, Color Adjustments, and Vignette are logged for reference so you can rebuild the look in tools like DaVinci Resolve, but they are not baked into the raw scene-linear EXR pixels.
-
-> **Important:** The climate volume sits at priority 50. `LightingPostProcessVolume` at priority 1000 overrides **Contrast** and **ColorFilter** during day/night transitions. The final baked values depend on the complete blended volume stack, not the climate prefab values in isolation.
+While post exposure and all color adjustments are not included in the EXR, in game are applied before LUT that is accurate and desired colour science behaviour, which we address later in Lumina preset, else this will be controlled by climate or user with Photo mode.
 
 
-## 8. Data Integrity Reference
+> [!NOTE]
+> In Short EXR will have auto-exposure but not post-exposure, colour effects or any postprocess effects like bloom etc, but also not have any antialiasing baked into pixels. This is why you can take super resolution screenshot with the mod, and inside DaVinci viewport, it will look like its anti aliased image.
 
-| Property | Legacy CS1 (.png) | This Mod (.exr) |
-| :--- | :--- | :--- |
-| **Bit depth** | 8-bit integer | 11/11/10-bit float (positive HDR) |
-| **Encoding** | sRGB gamma | **Linear scene-referred** |
-| **Exposure** | Auto + PostExposure + tonemapper baked | **Auto only** (PostExposure excluded) |
-| **Tonemapping** | Fully baked, irreversible | **Not applied** |
-| **Colour grade** | Fully baked | **Not applied** |
-| **Dynamic range** | 0–1, clamped | **Unclamped HDR headroom** |
-| **LUT authoring suitability** | None (circular reference) | **Direct source material** |
+> [!TIP]
+>  For better DaVinci view **Project settings > Image Scaling > Resize filter** set to **Smoother**.
 
-### Why Log encoding matters for 32³
 
-A 32³ LUT has 32 divisions per axis- 32,768 nodes total. In linear space, the shadow region (0.0–0.1) receives only ~3 of those 32 steps, causing posterisation in dark areas. In LogC space the steps redistribute perceptually, giving roughly equal grid density across shadows, midtones, and highlights. This is why `LinearToLogC` is mandatory before LUT sampling, and why you must match it in Resolve.
+# Creating LUT
 
-## 9. Mod Capture Point in Context
+To view your grade exactly in same way as game sees it, we can set up colour management matching what game does in its pipeline when using external LUT’s.
 
-```
-Scene rendered (all lights, GI, SSR, fog, VFX)
-    ↓  auto-exposure from PREVIOUS frame applied to radiance during shading
-    ↓
-CustomPassInjectionPoint.BeforePostProcess
-    ↓  ← [EXR CAPTURED HERE]  cameraColorBuffer = R11G11B10 linear HDR
-    ↓
-RenderPostProcess() begins:
-  StopNaNs → DynamicExposurePass → DLSS/FSR → BeforeTAA → TAA
-  → DoF → MotionBlur
-  → Bloom
-  → ColorGradingPass (LutBuilder3D): bakes grade + tonemapper into 32³ logLUT
-  → UberPass: PostExposure × LinearToLogC → sample logLUT → Vignette → Bloom add
-  → FXAA → FinalPass → display
-```
+### Prerequisites
+First you need extract the exact transform LUT's directly from the Unity Engine:
 
-## 10. Technical Verification & Further Reading
+1. Open Unity Hub and create a **High Definition 3D** sample project.
+2. Go to: **Window > Package Manager** > **High Definition RP** > **Samples** > **Additional Post-processing Data** > **Import**.
+3. In project tab Navigate to: `Assets\Samples\High Definition RP\[Version]\Additional Post-processing Data\Cube LUTs`
+4. Copy all .cube files into your DaVinci Resolve LUT folder **Shift+9 > Colour Management > Open LUT Folder > create "Unity" subfolder**.
 
-- **[Unity HDRP: Custom Pass Injection Points](https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@15.0/manual/Custom-Pass-Injection-Points.html)** - confirms `BeforePostProcess` state (after lighting/transparency, before tonemapping/AA)
-- **[Unity HDRP: Customizing with Custom Passes](https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@15.0/manual/Custom-Pass.html)** - details how `CustomPassContext` provides zero-copy access to internal `RTHandle` buffers
+Now import some EXR Screenshots and drop them on the timeline, multiple screenshots can be combined into compound clip so they will share the node graph.
 
 ---
 
-# 📸 Professional Workflow: Linear HDR & LUT Creation
+### Project Setup in Resolve
 
-## 1. The Color Adjustments Rule: "Zeroing" the Engine
+### Easy method
 
-In Unity HDRP, parameters like **Post Exposure, Contrast, Hue Shift, and Saturation** belong to the `ColorAdjustments` volume. Because this mod captures the frame at `BeforePostProcess`, **none of these adjustments are baked into your EXR.** The EXR is completely immune to them.
+You can use unity LUT files in two main ways, but we will do the easy one that will work both for export and preview.
 
-However, you might want to still manage them for your custom LUT via lumina preset to look correct and as intended in game.
+Inside Project Settings **Shift + 9 > Color Management**:
 
-Auto-Exposure Pipeline: The game uses AutomaticHistogram metering with a Center-Weighted mask, adapting over time constrained by **limitMin** and **limitMax** stops, targeting a 12.5% mid-grey average scene luminance (e.g. to prevent night scenes from being over-exposed).
-
-**Importantly, this auto-exposure is applied in-game BEFORE the LUT stage, meaning your EXR captures exactly what the LUT 'sees.'** (after auto-exposure colour buffer is transformed from linear space to unity log colour space then lut and the rest is applied)
-
-Further this auto-exposure is applied during shading inside shader using the previous frame’s computed exposure value. The captured EXR therefore contains exposure-adjusted scene radiance ('pre-tonemapping'), with a one-frame adaptation delay that is typically imperceptible.
-
-Practical Note: Because auto-exposure is already applied. This means the image is ready for grading and does not require massive gain adjustments to be viewable.
-
-Note: All other post-processing values (**Tonemapping, LUT, PostExposure, ColorAdjustments, Bloom etc.**) are NOT present in EXR. You can use this log to replicate the game look in Resolve. However, I advise to manage them for your custom LUT to look correct in-game by authoring custom Lumina presets for full control over your look. Else be aware that Climate volumes vary significantly by season and their type (Boreal vs. Tropical vs. Standard) and game feature specific overrides for Dusk, Dawn, Day, and Night.
-
-**The "Double Grade" Problem:**
-If you author a perfect LUT in DaVinci Resolve based on your pure EXR, and then load it into the game, the engine doesn't just apply your LUT. It applies your LUT *plus* whatever `ColorAdjustments` are active in the current weather/climate prefab or Lumina profile.
-
-If the vanilla sunset climate prefab automatically pushes Contrast to +20, your custom LUT will suddenly look crushed and ruined in-game, even though it looked flawless in Resolve.
-
-**The Solution:**
-To ensure what you see in DaVinci Resolve is exactly a 1:1 match with what you see in-game, you must prevent the engine from adding its own color math on top of your LUT.
-
-Before testing your LUT in-game, use the **Lumina** mod to lock the following values to their neutral baseline (`0`):
-* Post Exposure = 0
-* Contrast = 0
-* Hue Shift = 0
-* Saturation = 0
-* Colour Filter = White (FFFFFF) if it ever gets added.
-* Shadows, Midtones, & Highlights: To your desired static value.
-  Note: Even though Lumina uses single-value sliders, the game's internal Season Colour Overrides use three separate RGB float values rather than a single value for each channel. Setting them to a consistent baseline removes seasonal colour variation regardless of the current in-game season.
+![Project Setting](</Documentation/Project Settings.png> "Project Settings")
 
 
-By locking these to zero, you bypass the game's dynamic color adjustments entirely, ensuring your custom LUT is the *only* thing grading the final image.
-
-
-## 2. Mastering the DaVinci Resolve Workflow
-
-> ⚠️ This workflow is based on engine analysis and has not been fully battle-tested. Community feedback welcome.
-
-When you set Lumina's Tonemapping Mode to "External", Unity expects a **Log-encoded 3D LUT**. If you author a LUT using standard sRGB linear math, you will ruin the image's shadow precision and clip the highlights.
-
-You must map the linear EXR into Unity's internal working color space: **ARRI Alexa LogC (Exposure Index 1000)**. You can do this using exact math, or by using Unity's official sample LUTs.
-
-### Project Setup in Resolve 
-* **Color Science:** DaVinci YRGB
-* **Timeline Color Space:** Rec.709 (Scene)
-* **Output Color Space:** sRGB
-
-### Method A: Using Unity's Official LUTs (Recommended Method)
-You need extract the exact transform LUTs directly from the Unity Engine:
-1. Open Unity Hub and create a "High Definition 3D sample" project.
-2. Go to **Window > Package Manager**, select **High Definition RP**.
-3. Under Samples, click **Import** next to **Additional Post-processing Data**.
-4. In the Samples section, select Import into Project next to Additional Post-processing Data
-5. Navigate to: `Assets\Samples\High Definition RP\[Version]\Additional Post-processing Data\Cube LUTs`.
-6. Copy `Linear to Unity Log r1.cube` and `Unity Log to sRGB r1.cube` and all the rest of LUTs into your DaVinci Resolve LUT folder. DaVinci Resolve File > Project Settings and go to the Color Management > Open LUT Folder > (make new "Unity" folder) > Drop the LUT's there.
-
-> This  is similar as in official Unity documentation "Step: 2" but our EXR is not in Log colour space but Linear colour space https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@10.8/manual/LUT-Authoring-Resolve.html
-
-### Method B: The Exact Engine Math (DCTL / CST) The Unity LogC Transform (I cant test this myself, but should be enough info for those who can)
-Pro colorists often prefer using math nodes for maximum precision. You can use a Color Space Transform (CST) set to *Linear input* and *ARRI LogC3 output*, or use a DCTL with Unity's exact `Color.hlsl` formula:
-
-Unity uses the **ARRI Alexa LogC (Exposure Index 1000)** spec as its internal LUT working space. The constants and piecewise function below are taken verbatim from `Color.hlsl` in the HDRP package (`Alexa LogC converters (El 1000)`):
-
-**Constants:**
-
-| Constant | Value | Role |
-| :--- | :--- | :--- |
-| `cut` | `0.011361` | Threshold below which the linear segment applies |
-| `a` | `5.555556` | Scale inside the log argument |
-| `b` | `0.047996` | Offset inside the log argument |
-| `c` | `0.244161` | Log slope |
-| `d` | `0.386036` | Log offset |
-| `e` | `5.301883` | Linear segment slope |
-| `f` | `0.092819` | Linear segment offset |
-
-
-
-$x$ represents the Linear pixel value and $f(x)$ represents the resulting LogC value.
-
-**Forward Transform (Linear → LogC):**
-
-$$
-f(x) = \begin{cases}
-0.244161 \cdot \log_{10}(5.555556 \cdot x + 0.047996) + 0.386036 & \text{if } x > 0.011361 \\
-5.301883 \cdot x + 0.092819 & \text{if } x \leq 0.011361
-\end{cases}
-$$
-
-**Inverse Transform (LogC → Linear):**
-
-$$
-f^{-1}(x) = \begin{cases}
-\dfrac{10^{(x - 0.386036)\ /\ 0.244161} - 0.047996}{5.555556} & \text{if } x > e \cdot \text{cut} + f \\
-\dfrac{x - 0.092819}{5.301883} & \text{otherwise}
-\end{cases}
-$$
-
-
-
-> The shader's `USE_PRECISE_LOGC` define defaults to `0`, meaning the fast path omits the linear segment for the majority of pixels. For LUT authoring the precise piecewise version is more accurate in deep shadows and should be preferred in your DCTL.
-
-**Implementation in DaVinci Resolve:** Use a Color Space Transform (CST) node set to **Input: Linear** / **Output: ARRI LogC**, or implement the DCTL directly with the constants above.
-
-### The Node Pipeline
-Import your EXR screenshots combine them into single compound clip and build this exact node tree in the Color Tab:
-
-1.  **Node 1 (Input Transform):** Apply your Linear-to-LogC math, OR apply the `Linear to Unity Log r1` LUT.
-2.  **Nodes 2 to X (The Grade):** Do your creative grading here (Exposure, Saturation, Balance). *Crucial: You are now grading in Log space, capturing the full HDR dynamic range.*
-3.  **Final Node (Output Transform):** Map back to your display space. Apply the `Unity Log to sRGB r1` LUT.
-
-*Why this works:* Your exported LUT will contain the mathematical "sandwich" of receiving a Log image, applying your grade, and tonemapping it down to sRGB for the player's monitor.
-
-## 3. Exporting the LUT for the Game
-
-1. In DaVinci Resolve, right-click your graded clip and select **Generate LUT (CUBE) > 33 Point Cube**.
-2. **No Conversion Needed:** While Unity's HDRP natively utilizes a 32³ LUT grid, you *do not* need to use an external tool to convert your 33-point export. The **Lumina** mod features a built-in trilinear interpolator (`CubeLutLoader.cs`) that automatically resamples any size LUT down to a perfect 32³ grid upon import.
-3. Drop your generated `.cube` file into your `ModsData\Lumina\LUTS` folder.
-4. In-game, open Lumina, set **Tonemapping Mode to External**, and load your new LUT.
+<details>
+<summary>Other methods</summary>
 
 ---
 
-## 💡 Final Note: Scene Linear Workflow
+### Node sandwich method
 
-By using this mod and workflow, you are moving away from the "Instagram Filter" style of colour grading common in the original *Cities: Skylines*. Instead, you are adopting a **Scene-Linear Workflow** used in major motion pictures and AAA game development.
+Instead of using acquired LUT's in Color Management is to use them as sandwich of nodes around your colour grade for preview only and separate one just for export.
+In the Colour Tab node graph, use `Alt + S` to create 3-node sequence, right click on node and select listed LUT's.
 
-**Why does this matter?** In a linear workflow, light behaves like light. When you increase "Gain" in Resolve, you are mathematically increasing the radiance of the sun and streetlamps, not just brightening pixels. This preserves the subtle gradients in your atmosphere and prevents the "chalky" or "deep-fried" look that occurs when grading compressed 8-bit screenshots.
+Preview:
+- First node: `Linear to Unity Log r1`
+- Middle node(s): Your creative colour grading
+- Last node: `Unity Log to sRGB r1`
 
-This mod is a tool for the "Colorist." As we continue to decode the intricacies of the CS2 engine, this methodology may improve. If you discover a better node sandwich or a specific DCTL that yields better results, or any correction to this document please share it in CSM community!
+Export:
+- First node: `Disabled`
+- Middle node(s): Your creative colour grading
+- Last node: `Disabled`
+- Export node: `Unity Log to Linear r1`
 
-**Happy Grading!** 🎨
+---
+
+### CST sandwich method
+Instead of using acquired LUT's on preview nodes you can use custom Color Space Transform effect
+
+Preview:
+
+First node (add this in node effects):
+
+![CST Input](</Documentation/CST Input.png> "CST Input")
+
+Middle node(s): Your creative colour grading
+
+Last node (add this in node effects) :
+
+![CST Input](</Documentation/CST Output.png> "CST Output")
+
+Export:
+- First node: `Disabled`
+- Middle node(s): Your creative colour grading
+- Last node: `Disabled`
+- Export node: Unity Log to Linear r1
+
+> Easy method will match with game preview the best others deviate little more, but CST method would take better advantage of HDR range of EXR screenshot.
+
+
+--- 
+</details>
+
+Super resolution images are minimally brighter than normal native game view, probably because autoexposure have more pixels to accurately measure from, so you can do final check without super resolution screenshot.
+
+> [!TIP]
+> Last thing for the best comparison is to reduce the bloom effect intensity to **0** in the Photomode, or with **Lumina NGX** for more persistence.
+Temporarily enable **NGX** in **Lumina** options, in mod panel select ***Post Processing Settings > Bloom > intensity**, click on **>_** symbol set it to **0**.
+You can save this change as NGX Preset for later too.
+
+--- 
+
+### LUT Design
+
+
+You can use any tools that operate globally on colour itself rather than pixels, otherwise they will not have any effect in exported LUT.
+All the tools you need are in Color tab of DaVinci **Shift + 6**
+
+| Have effect on LUT                       | No effect on LUT  |
+|------------------------------------------|-------------------|
+| Col Boost, Sat, Hue, Temp, Tint          | Mid/detail        |
+| Contrast, Pivot                          | Hi/Light          |
+| Primaries Wheels, Log Wheels, HDR Wheels | Shad              |
+| RGB mixer                                | Qualifier, Keying |
+| Curves ( Master, Hue vs Hue etc.)        | Masking, Windows  |
+| Color Slice                              | Sharpening        |
+| Color Warper                             | Blurring           |
+
+
+Crucial thing in you establish your exposure and contrast early in node graph.
+If you export the LUT with initial project setup you will get LUT that will be equivalent to tonemapper set to "None".
+
+Most creative part is how you will treat the colours, after you establish your foundation this where majority of your vision comes in.
+
+You can split your Creative Look into couple separate nodes, for organization. For example:
+
+> Contrast > Saturation > Adjustment > Creative Look > Final Adjustment
+
+Consider that your LUT will be used in different lighting conditions. Give your look room to breathe, avoid pushing the look as hard as possible, that you would for fixed video footage.
+
+---
+
+### Exporting the LUT for the Game
+
+In DaVinci Resolve, inside the colour tab you are in, right-click your graded clip and select:
+
+**Generate LUT (CUBE) > 33-Point Cube**, save it in **ModsData\Lumina\LUTs** folder.
+
+> [!TIP]
+> If you ever want to import your LUT back into DaVinci, a 33-point resolution LUT will degrade. For that case, you should export at 65-point resolution instead.
+
+---
+
+### Using LUT in Game
+
+To prevent seasonal climate colour overrides affecting your custom LUT use it this way:
+
+1. Open Lumina menu and tick **ENABLE LUMINA VOLUME**
+2. Set LUT Contribution to **1**
+3. Zero out conflicting parameters: Set Post Exposure, Contrast, Saturation, Hue, Tint, and Temp to **0**[^1]
+4. Set Shadows, Midtones Highlights to **0.2385156**[^2]
+5. Set the **Tonemapping Mode** to **External** select your **LUT**  from the list, and click **Load LUT**
+
+If you are using RZColor you should also disable the settings for now.
+
+If everything went right, your LUT should look almost exactly as you saw it in DaVinci.
+
+You can also share preset later in LUT Pack mod later, basic guide how to make pack is in official Lumina wiki, my LUT Packs have code slightly modified to support sharing presets.
+
+---
+
+### Links
+- [Mod page](https://mods.paradoxplaza.com/mods/139839/Windows)
+- [Mod discussion on Paradox forum](https://forum.paradoxplaza.com/forum/threads/exr-screenshot.1916082/)
+- [Technical deeper dive](TECHNICAL.md)
+- [Source code on GitHub](https://github.com/DamiancioSkylines/cities2-EXR-Screenshot)
+- [Making LUT Pack](https://skylinx.gitbook.io/lumina/packages/publish-lut-pack-to-paradox-mods)
+- [Ko-Fi](https://ko-fi.com/damiancioskylines)
+
+[^1]: Vanilla sunset climate prefab automatically pushes Contrast to positive value, your custom LUT can suddenly look crushed and ruined in-game, even though it looked flawless in Resolve. Be aware that Climate volumes vary significantly by season and their type (Boreal vs. Tropical vs. Standard) and game feature specific overrides for Dusk, Dawn, Day, and Night, and they will change parameters.
+
+[^2]: Each of those is Vector made of 4 components, first 3 are RGB channels and last one is Weight, the game's internal Season Colour Overrides use three separate RGB float values rather than a single value for each channel, with weight usually set to 0. While Photo mode set all three channels to 1 and uses weight component instead, acting more like exposure offset in range of shadows midtones or highlights. This vector acts as multiplier, value in gamma space that is converted and applies in linear space, and Lumina sets all 4 components at once to singular value, so to get identity multiplier of 1, I did read the code line by line and did the math by hand, plot it on graph and that's the closest to neutral value you can get, with  +0.0000527% overshoot, until Lumina patches.
