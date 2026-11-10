@@ -179,7 +179,7 @@ You can also share preset later in LUT Pack mod, basic guide how to make pack is
 - [Technical deeper dive](TECHNICAL.md)
 - [Source code on GitHub](https://github.com/DamiancioSkylines/cities2-EXR-Screenshot)
 - [Modding Toolchain paradoxwiki](https://cs2.paradoxwikis.com/Modding_Toolchain)
-- [Making LUT Pack](https://skylinx.gitbook.io/lumina/packages/publish-lut-pack-to-paradox-mods)
+- [Making LUT Pack Mod](https://skylinx.gitbook.io/lumina/packages/publish-lut-pack-to-paradox-mods)
 - [Ko-Fi](https://ko-fi.com/damiancioskylines)
 
 [^1]: Vanilla sunset climate prefab automatically pushes Contrast to positive value, your custom LUT can suddenly look crushed and ruined in-game, even though it looked flawless in Resolve. Be aware that Climate volumes vary significantly by season and their type (Boreal vs. Tropical vs. Standard) and game feature specific overrides for Dusk, Dawn, Day, and Night, and they will change parameters.

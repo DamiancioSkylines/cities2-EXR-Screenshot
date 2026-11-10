@@ -504,7 +504,7 @@ You can also share preset later in LUT Pack mod, basic guide how to make pack is
 - [README](README.md)
 - [Source code on GitHub](https://github.com/DamiancioSkylines/cities2-EXR-Screenshot)
 - [Modding Toolchain paradoxwiki](https://cs2.paradoxwikis.com/Modding_Toolchain)
-- [Making LUT Pack](https://skylinx.gitbook.io/lumina/packages/publish-lut-pack-to-paradox-mods)
+- [Making LUT Pack Mod](https://skylinx.gitbook.io/lumina/packages/publish-lut-pack-to-paradox-mods)
 - [Ko-Fi](https://ko-fi.com/damiancioskylines)
 
 
