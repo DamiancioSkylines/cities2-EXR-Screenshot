@@ -1,7 +1,7 @@
 # EXR Screenshot
 Is Cities Skylines 2 mod, providing clean, high dynamic range plate for proper LUT creation.
 
-LUT (Look-Up Table) is a static, highly performant mapping file that transforms input colours to specific output colours. It replaces the engine’s tonemapping, allowing to make your own together with colour adjustments in other word colour grading. In a way it is a static texture that shader reads from instead of calculating values in real time.
+LUT (Look-Up Table) is a static, highly performant mapping file that transforms input colours to specific output colours. It replaces the engine’s tonemapping, allowing to make your own together with colour adjustments in other words colour grading. In a way it is a static texture that shader reads from instead of calculating values in real time.
 
 ### **LUT pipeline**
 
@@ -30,7 +30,10 @@ While post exposure and all color adjustments are not included in the EXR, in ga
 To view your grade exactly in same way as game sees it, we can set up colour management matching what game does in its pipeline when using external LUT’s.
 
 ### Prerequisites
-First you need extract the exact transform LUT's directly from the Unity Engine:
+If you don't have Unity installed yet, just follow Modding Toolchain guide, you will need for making LUT Pack Mod later too.
+[Modding Toolchain paradoxwiki](https://cs2.paradoxwikis.com/Modding_Toolchain)
+
+When you ready, you need extract the exact transform LUT's directly from the Unity Engine:
 
 1. Open Unity Hub and create a **High Definition 3D** sample project.
 2. Go to: **Window > Package Manager** > **High Definition RP** > **Samples** > **Additional Post-processing Data** > **Import**.
@@ -98,8 +101,8 @@ Export:
 
 > Easy method will match with game preview the best others deviate little more, but CST method would take better advantage of HDR range of EXR screenshot.
 
-
 --- 
+
 </details>
 
 Super resolution images are minimally brighter than normal native game view, probably because autoexposure have more pixels to accurately measure from, so you can do final check without super resolution screenshot.
@@ -175,6 +178,7 @@ You can also share preset later in LUT Pack mod, basic guide how to make pack is
 - [Mod discussion on Paradox forum](https://forum.paradoxplaza.com/forum/threads/exr-screenshot.1916082/)
 - [Technical deeper dive](TECHNICAL.md)
 - [Source code on GitHub](https://github.com/DamiancioSkylines/cities2-EXR-Screenshot)
+- [Modding Toolchain paradoxwiki](https://cs2.paradoxwikis.com/Modding_Toolchain)
 - [Making LUT Pack](https://skylinx.gitbook.io/lumina/packages/publish-lut-pack-to-paradox-mods)
 - [Ko-Fi](https://ko-fi.com/damiancioskylines)
 

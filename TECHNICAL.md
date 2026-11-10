@@ -339,7 +339,10 @@ When you set Lumina's Tonemapping Mode to "External", Unity expects a **Log-enco
 
 
 ### Prerequisites
-First you need extract the exact transform LUT's directly from the Unity Engine:
+If you don't have Unity installed yet, just follow Modding Toolchain guide, you will need for making Mod Pack Mod later too.
+[Modding Toolchain paradoxwiki](https://cs2.paradoxwikis.com/Modding_Toolchain)
+
+When you ready, you need extract the exact transform LUT's directly from the Unity Engine:
 
 1. Open Unity Hub and create a **High Definition 3D** sample project.
 2. Go to: **Window > Package Manager** > **High Definition RP** > **Samples** > **Additional Post-processing Data** > **Import**.
@@ -500,6 +503,7 @@ You can also share preset later in LUT Pack mod, basic guide how to make pack is
 - [Mod discussion on Paradox forum](https://forum.paradoxplaza.com/forum/threads/exr-screenshot.1916082/)
 - [README](README.md)
 - [Source code on GitHub](https://github.com/DamiancioSkylines/cities2-EXR-Screenshot)
+- [Modding Toolchain paradoxwiki](https://cs2.paradoxwikis.com/Modding_Toolchain)
 - [Making LUT Pack](https://skylinx.gitbook.io/lumina/packages/publish-lut-pack-to-paradox-mods)
 - [Ko-Fi](https://ko-fi.com/damiancioskylines)
 
