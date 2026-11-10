@@ -455,7 +455,7 @@ Implement the DCTL directly with the constants above.
 
 </details>
 
-Super resolution images are minimally brighter than normal native game view, probably because autoexposure have more pixels to accurately measure from, so you can do final check without super resolution screenshot.
+Super resolution images are minimally brighter than normal native game view. Doubt its mod issue as this happens also doing similar setup for regular screenshots in my tests, its probably official LUT transform discrepancy compared to full algorithmic transforms in game.
 
 > [!TIP]
 > Last thing for the best comparison is to reduce the bloom effect intensity to **0** in the Photomode, or with **Lumina NGX** for more persistence.
