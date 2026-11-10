@@ -300,8 +300,7 @@ RenderPostProcess() begins:
   → DoF → MotionBlur
   → Bloom
   → ColorGradingPass (LutBuilder3D): bakes grade + tonemapper into 32³ logLUT
-  → UberPass: PostExposure × LinearToLogC → sample logLUT → Vignette → Bloom add
-  → FXAA → FinalPass → display
+  → UberPass: Lens Distorion + Chromatic Aberration → Bloom add Vignette → PostExposure × LinearToLogC → sample logLUT → FinalPass → display
 ```
 
 ## 10. Technical Verification & Further Reading
