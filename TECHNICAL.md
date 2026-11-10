@@ -300,7 +300,7 @@ RenderPostProcess() begins:
   → DoF → MotionBlur
   → Bloom
   → ColorGradingPass (LutBuilder3D): bakes grade + tonemapper into 32³ logLUT
-  → UberPass: Lens Distorion + Chromatic Aberration → Bloom add Vignette → PostExposure × LinearToLogC → sample logLUT → FinalPass → display
+  → UberPass: Lens Distortion + Chromatic Aberration → Bloom add → Vignette → PostExposure × LinearToLogC → sample logLUT → FXAA → FinalPass → display
 ```
 
 ## 10. Technical Verification & Further Reading
@@ -427,7 +427,7 @@ Unity uses the **ARRI Alexa LogC (Exposure Index 1000)** spec as its internal LU
 | `e` | `5.301883` | Linear segment slope |
 | `f` | `0.092819` | Linear segment offset |
 
-Here, `x` represents the Linear pixel value, and the function  represents the resulting LogC value.
+Here, `x` represents the Linear pixel value, and the result is the LogC value.
 
 **Forward Transform (Linear → LogC):**
 
