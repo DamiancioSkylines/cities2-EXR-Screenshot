@@ -487,7 +487,7 @@ To prevent seasonal climate colour overrides affecting your custom LUT use it th
 
 > [!TIP]
 > Lastly for the best comparison with DaVinci preview is to reduce the bloom effect intensity to **0** in the Photomode, or with **Lumina NGX** for more persistence.
-Temporarily enable **NGX** in **Lumina** options, in mod panel select ***Post Processing Settings > Bloom > intensity**, click on **>_** symbol set it to **0**.
+Temporarily enable **NGX** in **Lumina** options, in mod panel select **Post Processing Settings > Bloom > intensity**, click on **>_** symbol set it to **0**.
 You can save this change as NGX Preset for later too.
 
 If everything went right, your LUT should look almost exactly as you saw it in DaVinci.
@@ -512,7 +512,7 @@ By using this mod and workflow, you are moving away from the "Instagram Filter" 
 
 **Why does this matter?** In a linear workflow, light behaves like light. When you increase "Gain" in Resolve, you are mathematically increasing the radiance of the sun and streetlamps, not just brightening pixels. This preserves the subtle gradients in your atmosphere and prevents the "chalky", "deep-fried" or "cracking" look that occurs when grading compressed 8-bit screenshots.
 
-If you discover a better node sandwich or a specific DCTL that yields better results, or any correction to this document please share it in CSM community!
+If you discover a better node sandwich or a specific DCTL that yields better results, or any correction to this document please share it on mod forum or find me in CSM community!
 
 [^1]: Vanilla sunset climate prefab automatically pushes Contrast to positive value, your custom LUT can suddenly look crushed and ruined in-game, even though it looked flawless in Resolve. Be aware that Climate volumes vary significantly by season and their type (Boreal vs. Tropical vs. Standard) and game feature specific overrides for Dusk, Dawn, Day, and Night, and they will change parameters.
 

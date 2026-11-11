@@ -164,7 +164,7 @@ To prevent seasonal climate colour overrides affecting your custom LUT use it th
 
 > [!TIP]
 > Lastly for the best comparison with DaVinci preview is to reduce the bloom effect intensity to **0** in the Photomode, or with **Lumina NGX** for more persistence.
-Temporarily enable **NGX** in **Lumina** options, in mod panel select ***Post Processing Settings > Bloom > intensity**, click on **>_** symbol set it to **0**.
+Temporarily enable **NGX** in **Lumina** options, in mod panel select **Post Processing Settings > Bloom > intensity**, click on **>_** symbol set it to **0**.
 You can save this change as NGX Preset for later too.
 
 If everything went right, your LUT should look almost exactly as you saw it in DaVinci.
