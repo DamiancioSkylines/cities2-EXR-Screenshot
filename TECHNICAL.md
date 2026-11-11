@@ -327,10 +327,6 @@ Further this auto-exposure is applied during shading inside shader using the pre
 > [!NOTE]
 > In Short EXR will have auto-exposure but not post-exposure, colour effects or any postprocess effects like bloom etc, but also not have any antialiasing baked into pixels. This is why you can take super resolution screenshot with the mod, and inside DaVinci viewport, it will look like its anti aliased image.
 
-> [!TIP]
->  For better DaVinci view **Project settings > Image Scaling > Resize filter** set to **Smoother**.
-
-
 ## Creating LUT
 
 To view your grade exactly in same way as game sees it, we can set up colour management matching what game does in its pipeline when using external LUT’s.
@@ -455,18 +451,15 @@ Implement the DCTL directly with the constants above.
 
 </details>
 
-Super resolution images are minimally brighter than normal native game view. Doubt its mod issue as this happens also doing similar setup for regular screenshots in my tests, its probably official LUT transform discrepancy compared to full algorithmic transforms in game.
-
 > [!TIP]
-> Last thing for the best comparison is to reduce the bloom effect intensity to **0** in the Photomode, or with **Lumina NGX** for more persistence.
-Temporarily enable **NGX** in **Lumina** options, in mod panel select ***Post Processing Settings > Bloom > intensity**, click on **>_** symbol set it to **0**.
-You can save this change as NGX Preset for later too.
+>  For better DaVinci view, inside Project Settings **Shift + 9 > Image Scaling > Resize filter** set to **Smoother**.
 
---- 
+Super resolution images are minimally brighter than normal native game view. Doubt its mod issue as this happens also doing similar setup for regular screenshots in my tests, its probably official LUT transform discrepancy compared to full algorithmic transforms in game.
 
 > [!NOTE]
 > This  is similar as in official Unity documentation "Step: 2" but our EXR is not in Log colour space but Linear colour space https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@10.8/manual/LUT-Authoring-Resolve.html
 
+--- 
 
 ### Exporting the LUT for the Game
 
@@ -489,7 +482,13 @@ To prevent seasonal climate colour overrides affecting your custom LUT use it th
 4. Set Shadows, Midtones Highlights to **0.2385156**[^2]
 5. Set the **Tonemapping Mode** to **External** select your **LUT**  from the list, and click **Load LUT**
 
-If you are using RZColor you should also disable the settings for testing your LUT.
+> [!TIP]
+> When using **RZColor** if you customized anything, you should also disable the settings for testing.
+
+> [!TIP]
+> Lastly for the best comparison with DaVinci preview is to reduce the bloom effect intensity to **0** in the Photomode, or with **Lumina NGX** for more persistence.
+Temporarily enable **NGX** in **Lumina** options, in mod panel select ***Post Processing Settings > Bloom > intensity**, click on **>_** symbol set it to **0**.
+You can save this change as NGX Preset for later too.
 
 If everything went right, your LUT should look almost exactly as you saw it in DaVinci.
 
