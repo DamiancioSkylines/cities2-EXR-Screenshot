@@ -40,7 +40,7 @@ Now import some EXR Screenshots and drop them on the timeline, multiple screensh
 
 ---
 
-### Project Setup in Resolve
+### Project Setup in DaVinci Resolve
 
 ### Easy method
 

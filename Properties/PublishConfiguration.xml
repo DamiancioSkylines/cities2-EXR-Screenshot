@@ -8,25 +8,21 @@
 	<!--Long description of the mod. Single line or multi line. Supports minimal Markdown subset-->
 	<!--LongDescription Value="This mod lets you take EXR in linear colour space screenshots" /-->
 	<LongDescription>
-**WORK IN PROGRESS** (Documentation)
-
 This mod is not meant for beauty shots. It's designed for creators who want to author custom LUTs using something like DaVinci Resolve.
 
 Unlike standard screenshots that bake display-referred colours, this mod captures internal scene-referred **Linear Rec.709** directly from the HDRP buffer.
 
 ### Key Features
 * **EXR:** Saves in **16-bit per channel** (Half-Float) EXR format. No data loss when capturing the engine's internal **32-bit total** packed HDR buffer.
-* **Scene-Linear Workflow:** Captures at the BeforePostProcess injection point. So no: DLSS / FSR2, TAA / SMAA, Weather colour overrides, Tonemapping (ACES / LUTs), PostExposure, effects etc baked into the pixels.
+* **Capture point:** At the BeforePostProcess injection point. So no: DLSS / FSR2, TAA / SMAA, Weather colour overrides, Tonemapping (ACES / LUTs), PostExposure, effects etc baked into the pixels.
 * **Super Resolution:** Scale internal rendering up to 4x of native screen resolution regardless upscaler you have selected, as antialiasing happens in postprocessing that is excluded.
 * **Accumulation Frames:**  Wait frames before taking the shot, **Global Illumination (SSGI)** and **Ambient Occlusion (SSAO)** need more frames to accumulate for cleaner resolved image.
 * **Metadata Inspection:** Generates metadata `.txt` file for every shot, logging the exact exposure values, climate overrides, and active volume stack etc.
 
-### Professional Pipeline
 Using EXR screenshots will ensure you are the sole author of the game look, preventing double grading artefacts when you are designing LUT.
-Standard PNGs are 8-bit "Display" images. EXRs are "Data." By grading raw 16-bit float data you doing it in accurate way.
 
 ### Usage:
-**SHIFT + F1**: Capture EXR screenshot. With 4x SuperResolution screenshot can take a while, and performance recovers after couple seconds.
+**SHIFT + F1**: Capture EXR screenshot. With 4x Super Resolution screenshot can take a while, and performance recovers after couple seconds.
 
 ### Compatibility:
 Works with or without Lumina or Time &amp; Weather Anarchy or RZColor.
@@ -36,7 +32,7 @@ Screenshots and Metadata are saved to:
 
 `%AppData%\LocalLow\Colossal Order\Cities Skylines II\Screenshots\EXR\`
 
-**Refer to the included README on GitHub for the exact DaVinci Resolve node setup and more details.** (Documentation still subject to update)
+**Refer to the included README on GitHub for exact DaVinci Resolve guide and more details.**
 	</LongDescription>
 	<!--Thumbnail-->
 	<Thumbnail Value="Properties/Thumbnail.png" />
@@ -57,11 +53,9 @@ Screenshots and Metadata are saved to:
 	<!--Change log for new version. Single line or multi line. Supports minimal markdown subset-->
 	<ChangeLog Value="" />
 	<ChangeLog>
-- Metadata support now TextureCurves and AnimationCurves in volume parameters
+- Simplified README guide
 	</ChangeLog>
 	<!--External link, can be set multiple times. supported types are "discord", "github", "youtube", "twitch", "x", "paypal", "patreon", "buymeacoffee", "kofi", "crowdin", "gitlab", "gofundme"-->
 	<ExternalLink Type="github" Url="https://github.com/DamiancioSkylines/cities2-EXR-Screenshot" />
 	<ExternalLink Type="kofi" Url="https://ko-fi.com/damiancioskylines" />
-	<!--Supported values Public, Private, Unlisted-->
-	<AccessLevel Value="Public" />
 </Publish>

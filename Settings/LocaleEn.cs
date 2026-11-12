@@ -39,8 +39,8 @@ namespace EXRScreenshot.Settings
                 { setting.GetOptionDescLocaleID(nameof(Setting.KoFiLink)), "Opens Ko-Fi page"},
                 
                 // Github
-                { setting.GetOptionLabelLocaleID(nameof(Setting.GithubLink)), "Source Code on Github" },
-                { setting.GetOptionDescLocaleID(nameof(Setting.GithubLink)), "Access to source code, and detailed explanation to answer as many questions you might have."},
+                { setting.GetOptionLabelLocaleID(nameof(Setting.GithubLink)), "Guide and Source Code" },
+                { setting.GetOptionDescLocaleID(nameof(Setting.GithubLink)), "Opens GitHub with Guide and source code."},
                 
                 // Mod Version
                 { setting.GetOptionLabelLocaleID(nameof(Setting.ModVersion)), "Mod Version"},
